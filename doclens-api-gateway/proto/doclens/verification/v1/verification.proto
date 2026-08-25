@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package doclens.verification.v1;
+
+option go_package = "github.com/doclens/api-gateway/internal/gen/doclens/verification/v1;verificationv1";
+
+service VerificationService {
+  rpc StartVerification(StartVerificationRequest) returns (Verification);
+  rpc GetVerification(GetVerificationRequest) returns (Verification);
+}
+
+message StartVerificationRequest {
+  string organization_id = 1;
+  string document_id = 2;
+  repeated string checks = 3;
+}
+
+message GetVerificationRequest {
+  string organization_id = 1;
+  string id = 2;
+}
+
+message Verification {
+  string id = 1;
+  string document_id = 2;
+  string organization_id = 3;
+  int32 risk_score = 4;
+  string status = 5;
+  string created_at = 6;
+  string completed_at = 7;
+}
