@@ -12,6 +12,7 @@ import (
 	"github.com/doclens/api-gateway/internal/observability"
 	"github.com/doclens/api-gateway/internal/ratelimit"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 )
 
 type Server struct {
@@ -82,8 +83,10 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		defer cancel()
 		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", requestID)
+		r = r.WithContext(metadata.NewOutgoingContext(r.Context(), metadata.Pairs("x-request-id", requestID)))
 
 		if s.limiter != nil && !s.limiter.Allow(clientIP(r)) {
+			recorder.Header().Set("Retry-After", "1")
 			observability.Error(recorder, http.StatusTooManyRequests, "rate limit exceeded")
 			s.finish(r, requestID, recorder.status, start)
 			return
@@ -96,6 +99,12 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				return
 			}
 			r = r.WithContext(auth.WithClaims(r.Context(), claims))
+			r = r.WithContext(metadata.AppendToOutgoingContext(r.Context(),
+				"x-user-id", claims.Subject,
+				"x-org-id", claims.OrganizationID,
+				"x-roles", strings.Join(claims.Roles, ","),
+				"x-permissions", strings.Join(claims.Permissions, ","),
+			))
 		}
 		next.ServeHTTP(recorder, r)
 		s.finish(r, requestID, recorder.status, start)
@@ -120,7 +129,21 @@ func requiresAuth(r *http.Request) bool {
 	if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" {
 		return false
 	}
-	return !(r.Method == http.MethodPost && r.URL.Path == "/identity/login")
+	if r.Method != http.MethodPost {
+		return true
+	}
+	switch r.URL.Path {
+	case "/identity/signup",
+		"/identity/signup/verify-email",
+		"/identity/signup/organization",
+		"/identity/login",
+		"/identity/login/google",
+		"/identity/forgot-password",
+		"/identity/reset-password":
+		return false
+	default:
+		return true
+	}
 }
 
 func requestID(r *http.Request) string {

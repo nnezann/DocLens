@@ -20,6 +20,7 @@ type Claims struct {
 	Subject        string   `json:"sub"`
 	OrganizationID string   `json:"org_id"`
 	Roles          []string `json:"roles"`
+	Permissions    []string `json:"permissions"`
 	ExpiresAt      int64    `json:"exp"`
 }
 

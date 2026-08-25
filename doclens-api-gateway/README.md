@@ -39,6 +39,10 @@ GATEWAY_AUTH_DISABLED=true go run ./cmd/gateway
 
 The protobuf contracts live under `proto/doclens`. Regenerate Go bindings with:
 
+Identity signup, Google login, email verification, and password reset routes
+are treated as explicit public routes by the authentication middleware as
+their upstream RPCs are added.
+
 ```bash
 protoc --go_out=. --go_opt=module=github.com/doclens/api-gateway \
   --go-grpc_out=. --go-grpc_opt=module=github.com/doclens/api-gateway \
