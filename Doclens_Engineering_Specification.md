@@ -1,6 +1,6 @@
 # DocLens Engineering Specification
 
-**Status:** Unified Engineering Blueprint
+**Status:** Unified Engineering Blueprint — Document Intake persistence and eventing implemented
 **Project:** DocLens
 **Architecture:** Production-oriented microservices architecture
 **Primary API Style:** REST externally, gRPC internally
@@ -10,6 +10,7 @@
 **Object Storage:** S3-compatible storage
 **Deployment:** Docker + Kubernetes
 **AI/ML Services:** Python
+
 **Infrastructure Services:** Go mainly but for specific engines or components the best language there should be used
 
 ---
@@ -395,6 +396,10 @@ Owns:
 * `uploads`
 * `processing_jobs`
 
+The current persistence migration implements `documents` and `uploads`, plus
+the `event_outbox` table. A dedicated `processing_jobs` table and worker state
+model remain to be implemented.
+
 ### `documents`
 
 Represents the **logical document** being verified.
@@ -444,6 +449,22 @@ The initial architecture supports:
 
 The application should interact through an object-storage abstraction rather than hardcoding a provider.
 
+### Current Document Intake implementation
+
+The Document Intake service currently implements the object-storage abstraction
+in Go with:
+
+* Cloudflare R2 through its S3-compatible API for configured deployments;
+* a local filesystem adapter for development without cloud credentials.
+
+R2 is configured with `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, and `R2_BUCKET`. PostgreSQL is selected with
+`DATABASE_URL`; local development may use the in-memory metadata store when
+that variable is absent.
+
+The implementation uses tenant-scoped keys and never stores document bytes in
+PostgreSQL.
+
 ## APIs
 
 ```http
@@ -453,13 +474,49 @@ POST /documents/{id}/uploads
 GET  /documents/{id}/status
 ```
 
+The current Gateway-facing internal gRPC contract exposes the equivalent
+operations:
+
+* `CreateDocument`
+* `GetDocument`
+* `UploadDocument`
+* `GetDocumentStatus`
+
+The Document Intake service is independently runnable on the configured gRPC
+address and exposes the standard gRPC health service. Gateway REST routing is
+the next integration step and is not yet complete.
+
 ## Events Produced
 
 * `DocumentUploaded`
 
+The current `UploadDocument` implementation writes an `event_outbox` record in
+the same PostgreSQL transaction as upload metadata. A background publisher
+sends durable JSON messages to the RabbitMQ topic exchange using routing key
+`document.uploaded`, with exponential backoff on failure. A bounded-attempt
+dead-letter policy remains to be added. The event envelope
+contains
+`event_id`, `event_type`, `event_version`, `occurred_at`,
+`organization_id`, `document_id`, and upload metadata including
+`storage_ref`, checksum, content type, filename, and size.
+
+RabbitMQ outbox publishing requires PostgreSQL and is enabled with
+`RABBITMQ_URL` (optionally `RABBITMQ_EXCHANGE`, defaulting to
+`doclens.events`). Consumers must deduplicate using `event_id` or AMQP
+`message_id`.
+
+`CreateDocument` is currently the logical-document operation. Physical file
+ingestion and event creation use `UploadDocument`; the legacy inline-content
+fields on `CreateDocument` remain for the pre-integration local contract and
+will be removed or redirected when Gateway routing is updated.
+
 ## Events Consumed
 
 * `UserCreated`
+
+The `UserCreated` consumer is not implemented yet. The current service has no
+local identity projection and relies on authenticated Gateway metadata for
+organization scoping.
 
 ---
 
