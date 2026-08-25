@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"net/mail"
@@ -10,8 +11,8 @@ import (
 	"time"
 
 	"github.com/doclens/identity-service/internal/auth"
-	identityv1 "github.com/doclens/identity-service/internal/gen/doclens/identity/v1"
 	"github.com/doclens/identity-service/internal/domain"
+	identityv1 "github.com/doclens/identity-service/internal/gen/doclens/identity/v1"
 	"github.com/doclens/identity-service/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -88,18 +89,24 @@ func (s *Identity) Login(ctx context.Context, req *identityv1.LoginRequest) (*id
 	}
 	now := time.Now().UTC()
 	if err := s.store.SaveRefreshToken(ctx, domain.RefreshToken{
-		Token:     refreshToken,
+		TokenHash: hashRefreshToken(refreshToken),
 		UserID:    user.ID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(s.refreshTokenTTL),
 	}); err != nil {
 		return nil, status.Error(codes.Internal, "save refresh token")
 	}
+
 	return &identityv1.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User:         toProtoUser(user),
 	}, nil
+}
+
+func hashRefreshToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func SeedDevelopmentUser(ctx context.Context, svc *Identity, orgID, email, password string) error {

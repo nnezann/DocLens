@@ -22,21 +22,23 @@ type Server struct {
 	verifier       auth.Verifier
 	authDisabled   bool
 	limiter        *ratelimit.Limiter
+	publicLimiter  *ratelimit.Limiter
 	requestTimeout time.Duration
 	healthChecks   map[string]healthv1.HealthClient
 }
 
 type Deps struct {
-	Identity       IdentityClient
-	Documents      DocumentsClient
-	Verification   VerificationClient
-	HealthChecks   map[string]healthv1.HealthClient
-	Logger         *slog.Logger
-	Metrics        *observability.Metrics
-	JWTSecret      string
-	AuthDisabled   bool
-	RateLimiter    *ratelimit.Limiter
-	RequestTimeout time.Duration
+	Identity          IdentityClient
+	Documents         DocumentsClient
+	Verification      VerificationClient
+	HealthChecks      map[string]healthv1.HealthClient
+	Logger            *slog.Logger
+	Metrics           *observability.Metrics
+	JWTSecret         string
+	AuthDisabled      bool
+	RateLimiter       *ratelimit.Limiter
+	PublicRateLimiter *ratelimit.Limiter
+	RequestTimeout    time.Duration
 }
 
 func New(deps Deps) http.Handler {
@@ -47,6 +49,7 @@ func New(deps Deps) http.Handler {
 		verifier:       auth.NewVerifier(deps.JWTSecret),
 		authDisabled:   deps.AuthDisabled,
 		limiter:        deps.RateLimiter,
+		publicLimiter:  deps.PublicRateLimiter,
 		requestTimeout: deps.RequestTimeout,
 		healthChecks:   deps.HealthChecks,
 	}
@@ -85,7 +88,12 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", requestID)
 		r = r.WithContext(metadata.NewOutgoingContext(r.Context(), metadata.Pairs("x-request-id", requestID)))
 
-		if s.limiter != nil && !s.limiter.Allow(clientIP(r)) {
+		limited := requiresAuth(r)
+		limiter := s.limiter
+		if !limited {
+			limiter = s.publicLimiter
+		}
+		if limiter != nil && !limiter.Allow(clientIP(r)) {
 			recorder.Header().Set("Retry-After", "1")
 			observability.Error(recorder, http.StatusTooManyRequests, "rate limit exceeded")
 			s.finish(r, requestID, recorder.status, start)

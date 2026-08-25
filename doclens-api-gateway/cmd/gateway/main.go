@@ -41,16 +41,17 @@ func main() {
 	defer clients.Close()
 
 	handler := httpapi.New(httpapi.Deps{
-		Identity:       clients.Identity,
-		Documents:      clients.Documents,
-		Verification:   clients.Verification,
-		HealthChecks:   clients.HealthChecks,
-		Logger:         logger,
-		Metrics:        observability.NewMetrics(),
-		JWTSecret:      cfg.JWTSecret,
-		AuthDisabled:   cfg.AuthDisabled,
-		RateLimiter:    ratelimit.New(cfg.RateLimitRPS, cfg.RateLimitBurst),
-		RequestTimeout: cfg.RequestTimeout,
+		Identity:          clients.Identity,
+		Documents:         clients.Documents,
+		Verification:      clients.Verification,
+		HealthChecks:      clients.HealthChecks,
+		Logger:            logger,
+		Metrics:           observability.NewMetrics(),
+		JWTSecret:         cfg.JWTSecret,
+		AuthDisabled:      cfg.AuthDisabled,
+		RateLimiter:       ratelimit.New(cfg.RateLimitRPS, cfg.RateLimitBurst),
+		PublicRateLimiter: ratelimit.New(cfg.PublicRateLimitRPS, cfg.PublicRateLimitBurst),
+		RequestTimeout:    cfg.RequestTimeout,
 	})
 
 	server := &http.Server{

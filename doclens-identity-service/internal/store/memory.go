@@ -65,7 +65,7 @@ func (m *Memory) UserByEmail(_ context.Context, email string) (domain.User, erro
 func (m *Memory) SaveRefreshToken(_ context.Context, token domain.RefreshToken) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.refreshTokens[token.Token] = token
+	m.refreshTokens[token.TokenHash] = token
 	return nil
 }
 
