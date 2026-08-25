@@ -7,7 +7,7 @@
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "lint": "node ./node_modules/eslint/bin/eslint.js ."
+    "lint": "eslint ."
   },
   "dependencies": {
     "lucide-react": "^0.446.0",
