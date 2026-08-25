@@ -1,0 +1,142 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: doclens
+      POSTGRES_USER: doclens
+      POSTGRES_PASSWORD: doclens
+    ports:
+      - "${POSTGRES_HOST_PORT:-15432}:5432"
+    volumes:
+      - doclens-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doclens -d doclens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: doclens
+      RABBITMQ_DEFAULT_PASS: doclens
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - doclens-rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-doclens}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-doclens-local-secret}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - doclens-rustfs:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rustfs-init:
+    image: amazon/aws-cli:2.17.57
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket doclens
+        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket doclens
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-doclens}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-doclens-local-secret}
+      AWS_DEFAULT_REGION: us-east-1
+
+  identity:
+    build:
+      context: ./doclens-identity-service
+      dockerfile: Dockerfile
+    environment:
+      IDENTITY_GRPC_ADDR: ":9001"
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
+      IDENTITY_DEV_SEED: "true"
+    expose:
+      - "9001"
+
+  verification:
+    build:
+      context: ./doclens-api-gateway
+      dockerfile: Dockerfile
+      target: verification-stub
+    environment:
+      VERIFICATION_GRPC_ADDR: ":9003"
+    expose:
+      - "9003"
+
+  document-intake:
+    build:
+      context: ./doclens-document-intake-service
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      DOCUMENT_INTAKE_GRPC_ADDR: ":9002"
+      DOCUMENT_INTAKE_METRICS_ADDR: ":9092"
+      DOCUMENT_INTAKE_STORAGE_DIR: "/tmp/documents"
+      DATABASE_URL: postgres://doclens:doclens@postgres:5432/doclens?sslmode=disable
+      RABBITMQ_URL: amqp://doclens:doclens@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: doclens.events
+      R2_ENDPOINT: http://rustfs:9000
+      R2_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-doclens}
+      R2_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-doclens-local-secret}
+      R2_BUCKET: doclens
+    expose:
+      - "9002"
+      - "9092"
+    ports:
+      - "9092:9092"
+
+  gateway:
+    build:
+      context: ./doclens-api-gateway
+      dockerfile: Dockerfile
+      target: gateway
+    depends_on:
+      identity:
+        condition: service_started
+      document-intake:
+        condition: service_started
+      verification:
+        condition: service_started
+    environment:
+      GATEWAY_ADDR: ":8080"
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
+      IDENTITY_GRPC_ADDR: identity:9001
+      DOCUMENTS_GRPC_ADDR: document-intake:9002
+      VERIFICATION_GRPC_ADDR: verification:9003
+      GRPC_INSECURE: "true"
+    ports:
+      - "8080:8080"
+
+volumes:
+  doclens-postgres:
+  doclens-rabbitmq:
+  doclens-rustfs:
