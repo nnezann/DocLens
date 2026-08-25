@@ -115,6 +115,57 @@ func (s *PostgresStore) CreateDocument(ctx context.Context, doc Document) (Docum
 	return doc, nil
 }
 
+func (s *PostgresStore) CreateDocumentAndQueue(ctx context.Context, doc Document, upload UploadRecord, event OutboxEvent) (Document, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Document{}, fmt.Errorf("begin document transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO documents
+			(id, organization_id, type, filename, content_type, status, processing_job_status, storage_ref, size_bytes, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		doc.ID, doc.OrganizationID, doc.Type, doc.Filename, doc.ContentType,
+		doc.Status, doc.ProcessingJobStatus, doc.StorageRef, doc.SizeBytes, doc.CreatedAt, doc.UpdatedAt)
+	if err != nil {
+		return Document{}, fmt.Errorf("insert document: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO processing_jobs
+			(id, document_id, organization_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		"job_"+doc.ID, doc.ID, doc.OrganizationID, doc.ProcessingJobStatus, doc.CreatedAt, doc.UpdatedAt)
+	if err != nil {
+		return Document{}, fmt.Errorf("insert processing job: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO uploads
+			(id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref, idempotency_key, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		upload.ID, upload.DocumentID, upload.OrganizationID, upload.Filename, upload.ContentType,
+		upload.SizeBytes, upload.Checksum, upload.StorageRef, upload.IdempotencyKey, upload.CreatedAt)
+	if err != nil {
+		return Document{}, fmt.Errorf("insert upload: %w", err)
+	}
+	if !json.Valid(event.Payload) {
+		return Document{}, fmt.Errorf("outbox payload is not valid json")
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO event_outbox
+			(id, event_type, event_version, routing_key, organization_id, document_id, payload, status, next_attempt_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $8)`,
+		event.ID, event.EventType, event.EventVersion, event.RoutingKey, event.OrganizationID, event.DocumentID, event.Payload, event.CreatedAt)
+	if err != nil {
+		return Document{}, fmt.Errorf("insert event outbox record: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Document{}, fmt.Errorf("commit document transaction: %w", err)
+	}
+	doc.Uploads = append(doc.Uploads, upload)
+	return doc, nil
+}
+
 func (s *PostgresStore) GetDocument(ctx context.Context, organizationID, id string) (Document, error) {
 	doc, err := s.scanDocument(ctx, s.pool.QueryRow(ctx, `
 		SELECT id, organization_id, type, filename, content_type, status, processing_job_status, storage_ref, size_bytes, created_at, updated_at

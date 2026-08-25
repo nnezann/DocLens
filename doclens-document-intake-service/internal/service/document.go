@@ -89,7 +89,8 @@ func (s *Service) CreateDocument(ctx context.Context, req *documentsv1.CreateDoc
 		CreatedAt:           createdAt,
 		UpdatedAt:           createdAt,
 	}
-	if content := req.GetContent(); len(content) > 0 {
+	content := req.GetContent()
+	if len(content) > 0 {
 		if s.maxUploadBytes > 0 && int64(len(content)) > s.maxUploadBytes {
 			return nil, status.Errorf(codes.InvalidArgument, "document exceeds max upload size of %d bytes", s.maxUploadBytes)
 		}
@@ -114,7 +115,7 @@ func (s *Service) CreateDocument(ctx context.Context, req *documentsv1.CreateDoc
 		doc.SizeBytes = int64(len(content))
 		doc.UpdatedAt = time.Now().UTC()
 		checksum := sha256.Sum256(content)
-		if err := s.publisher.PublishDocumentUploaded(ctx, organizationID, doc.ID, store.UploadRecord{
+		upload := store.UploadRecord{
 			ID:             newID("upl"),
 			DocumentID:     doc.ID,
 			OrganizationID: organizationID,
@@ -124,9 +125,30 @@ func (s *Service) CreateDocument(ctx context.Context, req *documentsv1.CreateDoc
 			Checksum:       hex.EncodeToString(checksum[:]),
 			StorageRef:     storageRef,
 			CreatedAt:      time.Now().UTC(),
-		}); err != nil {
+		}
+		event, err := events.NewDocumentUploaded(newID("evt"), doc, upload)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "build document uploaded event: %v", err)
+		}
+		if durableStore, ok := s.store.(store.DurableDocumentStore); ok {
+			stored, err := durableStore.CreateDocumentAndQueue(ctx, doc, upload, event)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "persist document and event: %v", err)
+			}
+			return toProtoDocument(stored), nil
+		}
+		stored, err := s.store.CreateDocument(ctx, doc)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "persist document metadata: %v", err)
+		}
+		stored, err = s.store.UploadDocument(ctx, organizationID, doc.ID, upload)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "persist document upload: %v", err)
+		}
+		if err := s.publisher.PublishDocumentUploaded(ctx, organizationID, doc.ID, upload); err != nil {
 			return nil, status.Errorf(codes.Internal, "publish document uploaded event: %v", err)
 		}
+		return toProtoDocument(stored), nil
 	}
 	stored, err := s.store.CreateDocument(ctx, doc)
 	if err != nil {

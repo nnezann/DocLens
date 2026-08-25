@@ -41,8 +41,18 @@ func TestCreateAndGetDocument(t *testing.T) {
 	if resp.GetStatus() != "processing" {
 		t.Fatalf("status mismatch: %q", resp.GetStatus())
 	}
+	got, err := service.GetDocument(authenticatedContext(), &documentsv1.GetDocumentRequest{
+		OrganizationId: "org_1",
+		Id:             resp.GetId(),
+	})
+	if err != nil {
+		t.Fatalf("get created document: %v", err)
+	}
+	if len(got.GetUploads()) != 1 {
+		t.Fatalf("uploads = %d, want 1", len(got.GetUploads()))
+	}
 
-	got, err := service.GetDocument(authenticatedContext(), &documentsv1.GetDocumentRequest{OrganizationId: "org_1", Id: resp.GetId()})
+	got, err = service.GetDocument(authenticatedContext(), &documentsv1.GetDocumentRequest{OrganizationId: "org_1", Id: resp.GetId()})
 	if err != nil {
 		t.Fatalf("get document: %v", err)
 	}

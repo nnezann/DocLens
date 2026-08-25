@@ -65,6 +65,10 @@ type DurableUploadStore interface {
 	UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, event OutboxEvent) (Document, error)
 }
 
+type DurableDocumentStore interface {
+	CreateDocumentAndQueue(ctx context.Context, doc Document, upload UploadRecord, event OutboxEvent) (Document, error)
+}
+
 type MemoryStore struct {
 	mu   sync.RWMutex
 	docs map[string]Document
@@ -83,6 +87,13 @@ func (m *MemoryStore) CreateDocument(_ context.Context, doc Document) (Document,
 	clone := doc
 	m.docs[doc.ID] = clone
 	return clone, nil
+}
+
+func (m *MemoryStore) CreateDocumentAndQueue(ctx context.Context, doc Document, upload UploadRecord, _ OutboxEvent) (Document, error) {
+	if _, err := m.CreateDocument(ctx, doc); err != nil {
+		return Document{}, err
+	}
+	return m.UploadDocument(ctx, doc.OrganizationID, doc.ID, upload)
 }
 
 func (m *MemoryStore) GetDocument(_ context.Context, organizationID, id string) (Document, error) {
