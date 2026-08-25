@@ -44,7 +44,11 @@ CREATE TABLE IF NOT EXISTS uploads (
     checksum TEXT NOT NULL,
     storage_ref TEXT NOT NULL,
     idempotency_key TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending', 'uploaded', 'confirmed', 'failed')),
+    upload_method TEXT NOT NULL DEFAULT 'proxied' CHECK (upload_method IN ('presigned_direct', 'proxied')),
+    expected_size_bytes BIGINT NOT NULL DEFAULT 0 CHECK (expected_size_bytes >= 0),
     created_at TIMESTAMPTZ NOT NULL,
+    confirmed_at TIMESTAMPTZ,
     FOREIGN KEY (organization_id, document_id)
         REFERENCES documents (organization_id, id) ON DELETE CASCADE
 );
@@ -55,6 +59,11 @@ CREATE INDEX IF NOT EXISTS uploads_document_id_idx
 CREATE UNIQUE INDEX IF NOT EXISTS uploads_idempotency_key_idx
     ON uploads (organization_id, idempotency_key)
     WHERE idempotency_key <> '';
+
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS upload_method TEXT NOT NULL DEFAULT 'proxied';
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS expected_size_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS event_outbox (
     id TEXT PRIMARY KEY,

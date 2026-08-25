@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -112,6 +113,33 @@ func main() {
 		cfg.MaxUploadBytes,
 		cfg.AllowedContentTypes,
 	)
+	documentService, err = documentService.WithUploadPool(service.UploadPoolConfig{
+		Workers: cfg.UploadWorkers, TenantRate: cfg.UploadTenantRate, TenantBurst: cfg.UploadTenantBurst,
+		FailureThreshold: cfg.UploadFailureLimit, OpenDuration: cfg.UploadCircuitOpen,
+	})
+	if err != nil {
+		logger.Error("initialize upload pool", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	metrics := observability.NewIntakeMetrics()
+	documentService.WithMetrics(metrics)
+	metricsServer := &http.Server{Addr: cfg.MetricsAddress, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metrics" {
+			http.NotFound(w, r)
+			return
+		}
+		metrics.Handler().ServeHTTP(w, r)
+	})}
+	go func() {
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("metrics server failed", slog.String("error", err.Error()))
+		}
+	}()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = metricsServer.Shutdown(shutdownCtx)
+	}()
 
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {

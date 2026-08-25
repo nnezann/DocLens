@@ -14,6 +14,9 @@ import (
 
 var ErrDocumentNotFound = fmt.Errorf("document not found")
 var ErrOrganizationMismatch = fmt.Errorf("document belongs to a different organization")
+var ErrUploadNotFound = fmt.Errorf("upload not found")
+var ErrUploadNotPending = fmt.Errorf("upload is not pending")
+var ErrUploadMismatch = fmt.Errorf("upload verification failed")
 
 type UploadRecord struct {
 	ID             string
@@ -25,6 +28,10 @@ type UploadRecord struct {
 	Checksum       string
 	StorageRef     string
 	IdempotencyKey string
+	Status         string
+	UploadMethod   string
+	ExpectedSize   int64
+	ConfirmedAt    *time.Time
 	CreatedAt      time.Time
 }
 
@@ -48,6 +55,11 @@ type Store interface {
 	GetDocument(ctx context.Context, organizationID, id string) (Document, error)
 	UploadDocument(ctx context.Context, organizationID, documentID string, upload UploadRecord) (Document, error)
 	GetDocumentStatus(ctx context.Context, organizationID, documentID string) (Document, error)
+}
+
+type UploadIntentStore interface {
+	CreateUploadIntent(ctx context.Context, organizationID, documentID string, upload UploadRecord) (UploadRecord, error)
+	ConfirmUpload(ctx context.Context, organizationID, documentID, uploadID string, sizeBytes int64, checksum string, event OutboxEvent) (UploadRecord, error)
 }
 
 type OutboxEvent struct {
@@ -112,6 +124,12 @@ func (m *MemoryStore) GetDocument(_ context.Context, organizationID, id string) 
 func (m *MemoryStore) UploadDocument(_ context.Context, organizationID, documentID string, upload UploadRecord) (Document, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if upload.Status == "" {
+		upload.Status = "confirmed"
+	}
+	if upload.UploadMethod == "" {
+		upload.UploadMethod = "proxied"
+	}
 	doc, exists := m.docs[documentID]
 	if !exists {
 		return Document{}, ErrDocumentNotFound
@@ -136,6 +154,65 @@ func (m *MemoryStore) UploadDocument(_ context.Context, organizationID, document
 	return doc, nil
 }
 
+func (m *MemoryStore) CreateUploadIntent(_ context.Context, organizationID, documentID string, upload UploadRecord) (UploadRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, exists := m.docs[documentID]
+	if !exists {
+		return UploadRecord{}, ErrDocumentNotFound
+	}
+	if doc.OrganizationID != organizationID {
+		return UploadRecord{}, ErrOrganizationMismatch
+	}
+	for _, existing := range doc.Uploads {
+		if upload.IdempotencyKey != "" && existing.IdempotencyKey == upload.IdempotencyKey {
+			return existing, nil
+		}
+	}
+	upload.Status, upload.UploadMethod = "pending", "presigned_direct"
+	doc.Uploads = append(doc.Uploads, upload)
+	doc.UpdatedAt = time.Now().UTC()
+	m.docs[documentID] = doc
+	return upload, nil
+}
+
+func (m *MemoryStore) ConfirmUpload(_ context.Context, organizationID, documentID, uploadID string, sizeBytes int64, checksum string, _ OutboxEvent) (UploadRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, exists := m.docs[documentID]
+	if !exists {
+		return UploadRecord{}, ErrDocumentNotFound
+	}
+	if doc.OrganizationID != organizationID {
+		return UploadRecord{}, ErrOrganizationMismatch
+	}
+	for i := range doc.Uploads {
+		upload := &doc.Uploads[i]
+		if upload.ID != uploadID {
+			continue
+		}
+		if upload.Status == "confirmed" {
+			return *upload, nil
+		}
+		if upload.Status != "pending" {
+			return UploadRecord{}, ErrUploadNotPending
+		}
+		if upload.ExpectedSize > 0 && upload.ExpectedSize != sizeBytes {
+			return UploadRecord{}, ErrUploadMismatch
+		}
+		if upload.Checksum != "" && checksum != "" && upload.Checksum != checksum {
+			return UploadRecord{}, ErrUploadMismatch
+		}
+		now := time.Now().UTC()
+		upload.Status, upload.ConfirmedAt = "confirmed", &now
+		upload.SizeBytes, upload.Checksum = sizeBytes, checksum
+		doc.Status, doc.ProcessingJobStatus, doc.UpdatedAt = "processing", "queued", now
+		m.docs[documentID] = doc
+		return *upload, nil
+	}
+	return UploadRecord{}, ErrUploadNotFound
+}
+
 func (m *MemoryStore) UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, _ OutboxEvent) (Document, error) {
 	return m.UploadDocument(ctx, organizationID, documentID, upload)
 }
@@ -146,6 +223,16 @@ func (m *MemoryStore) GetDocumentStatus(_ context.Context, organizationID, docum
 
 type ObjectStorage interface {
 	Put(ctx context.Context, organizationID, documentID, filename, contentType string, content []byte) (string, error)
+}
+
+type ObjectHead struct {
+	SizeBytes int64
+	Checksum  string
+}
+
+type DirectUploadStorage interface {
+	PresignPut(ctx context.Context, organizationID, documentID, uploadID, filename, contentType string, expires time.Duration) (url string, storageRef string, expiresAt time.Time, err error)
+	Head(ctx context.Context, storageRef string) (ObjectHead, error)
 }
 
 type LocalObjectStorage struct {
@@ -176,6 +263,28 @@ func (s *LocalObjectStorage) Put(_ context.Context, organizationID, documentID, 
 		return "", err
 	}
 	return storageRef, nil
+}
+
+func (s *LocalObjectStorage) PresignPut(_ context.Context, organizationID, documentID, uploadID, filename, _ string, expires time.Duration) (string, string, time.Time, error) {
+	safeName := sanitizeFilename(filename)
+	if safeName == "" {
+		safeName = "upload.bin"
+	}
+	orgDir := filepath.Join(s.root, sanitizeSegment(organizationID))
+	if err := os.MkdirAll(orgDir, 0o755); err != nil {
+		return "", "", time.Time{}, err
+	}
+	ref := filepath.Join(orgDir, sanitizeSegment(documentID)+"_"+sanitizeSegment(uploadID)+"_"+safeName)
+	expiresAt := time.Now().UTC().Add(expires)
+	return "file://" + ref, ref, expiresAt, nil
+}
+
+func (s *LocalObjectStorage) Head(_ context.Context, storageRef string) (ObjectHead, error) {
+	info, err := os.Stat(storageRef)
+	if err != nil {
+		return ObjectHead{}, err
+	}
+	return ObjectHead{SizeBytes: info.Size()}, nil
 }
 
 func sanitizeFilename(value string) string {

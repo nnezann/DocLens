@@ -178,7 +178,8 @@ func (s *PostgresStore) GetDocument(ctx context.Context, organizationID, id stri
 		return Document{}, fmt.Errorf("select document: %w", err)
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref, idempotency_key, created_at
+		SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref,
+			idempotency_key, status, upload_method, expected_size_bytes, confirmed_at, created_at
 		FROM uploads
 		WHERE organization_id = $1 AND document_id = $2
 		ORDER BY created_at`, organizationID, id)
@@ -188,7 +189,9 @@ func (s *PostgresStore) GetDocument(ctx context.Context, organizationID, id stri
 	defer rows.Close()
 	for rows.Next() {
 		var upload UploadRecord
-		if err := rows.Scan(&upload.ID, &upload.DocumentID, &upload.OrganizationID, &upload.Filename, &upload.ContentType, &upload.SizeBytes, &upload.Checksum, &upload.StorageRef, &upload.IdempotencyKey, &upload.CreatedAt); err != nil {
+		if err := rows.Scan(&upload.ID, &upload.DocumentID, &upload.OrganizationID, &upload.Filename, &upload.ContentType,
+			&upload.SizeBytes, &upload.Checksum, &upload.StorageRef, &upload.IdempotencyKey, &upload.Status,
+			&upload.UploadMethod, &upload.ExpectedSize, &upload.ConfirmedAt, &upload.CreatedAt); err != nil {
 			return Document{}, fmt.Errorf("scan upload: %w", err)
 		}
 		doc.Uploads = append(doc.Uploads, upload)
@@ -201,6 +204,122 @@ func (s *PostgresStore) GetDocument(ctx context.Context, organizationID, id stri
 
 func (s *PostgresStore) UploadDocument(ctx context.Context, organizationID, documentID string, upload UploadRecord) (Document, error) {
 	return s.uploadDocument(ctx, organizationID, documentID, upload, nil)
+}
+
+func (s *PostgresStore) CreateUploadIntent(ctx context.Context, organizationID, documentID string, upload UploadRecord) (UploadRecord, error) {
+	var owner string
+	if err := s.pool.QueryRow(ctx, `SELECT organization_id FROM documents WHERE id = $1`, documentID).Scan(&owner); errors.Is(err, pgx.ErrNoRows) {
+		return UploadRecord{}, ErrDocumentNotFound
+	} else if err != nil {
+		return UploadRecord{}, fmt.Errorf("load document for upload intent: %w", err)
+	} else if owner != organizationID {
+		return UploadRecord{}, ErrOrganizationMismatch
+	}
+	if upload.IdempotencyKey != "" {
+		var existing UploadRecord
+		err := s.pool.QueryRow(ctx, `
+			SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref,
+				idempotency_key, status, upload_method, expected_size_bytes, confirmed_at, created_at
+			FROM uploads WHERE organization_id = $1 AND idempotency_key = $2`,
+			organizationID, upload.IdempotencyKey).Scan(
+			&existing.ID, &existing.DocumentID, &existing.OrganizationID, &existing.Filename,
+			&existing.ContentType, &existing.SizeBytes, &existing.Checksum, &existing.StorageRef,
+			&existing.IdempotencyKey, &existing.Status, &existing.UploadMethod, &existing.ExpectedSize,
+			&existing.ConfirmedAt, &existing.CreatedAt)
+		if err == nil {
+			return existing, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return UploadRecord{}, fmt.Errorf("check upload intent idempotency: %w", err)
+		}
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO uploads
+			(id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref,
+			 idempotency_key, status, upload_method, expected_size_bytes, created_at)
+		VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, 'pending', 'presigned_direct', $9, $10)`,
+		upload.ID, upload.DocumentID, upload.OrganizationID, upload.Filename, upload.ContentType,
+		upload.Checksum, upload.StorageRef, upload.IdempotencyKey, upload.ExpectedSize, upload.CreatedAt)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("insert upload intent: %w", err)
+	}
+	upload.Status, upload.UploadMethod = "pending", "presigned_direct"
+	return upload, nil
+}
+
+func (s *PostgresStore) ConfirmUpload(ctx context.Context, organizationID, documentID, uploadID string, sizeBytes int64, checksum string, event OutboxEvent) (UploadRecord, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("begin upload confirmation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var upload UploadRecord
+	err = tx.QueryRow(ctx, `
+		SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref,
+			idempotency_key, status, upload_method, expected_size_bytes, confirmed_at, created_at
+		FROM uploads WHERE organization_id = $1 AND document_id = $2 AND id = $3 FOR UPDATE`,
+		organizationID, documentID, uploadID).Scan(
+		&upload.ID, &upload.DocumentID, &upload.OrganizationID, &upload.Filename, &upload.ContentType,
+		&upload.SizeBytes, &upload.Checksum, &upload.StorageRef, &upload.IdempotencyKey, &upload.Status,
+		&upload.UploadMethod, &upload.ExpectedSize, &upload.ConfirmedAt, &upload.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return UploadRecord{}, ErrUploadNotFound
+	}
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("load upload intent: %w", err)
+	}
+	if upload.Status == "confirmed" {
+		return upload, nil
+	}
+	if upload.Status != "pending" {
+		return UploadRecord{}, ErrUploadNotPending
+	}
+	if upload.ExpectedSize > 0 && upload.ExpectedSize != sizeBytes {
+		return UploadRecord{}, ErrUploadMismatch
+	}
+	if upload.Checksum != "" && checksum != "" && upload.Checksum != checksum {
+		return UploadRecord{}, ErrUploadMismatch
+	}
+	now := time.Now().UTC()
+	_, err = tx.Exec(ctx, `
+		UPDATE uploads SET status = 'confirmed', size_bytes = $1, checksum = $2, confirmed_at = $3
+		WHERE organization_id = $4 AND document_id = $5 AND id = $6`,
+		sizeBytes, checksum, now, organizationID, documentID, uploadID)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("confirm upload: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE documents SET status = 'processing', processing_job_status = 'queued', storage_ref = $1, size_bytes = $2, updated_at = $3
+		WHERE organization_id = $4 AND id = $5`, upload.StorageRef, sizeBytes, now, organizationID, documentID)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("update confirmed document: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO processing_jobs (id, document_id, organization_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, 'queued', $4, $4)
+		ON CONFLICT (id) DO UPDATE SET status = 'queued', updated_at = EXCLUDED.updated_at`,
+		"job_"+documentID, documentID, organizationID, now)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("update processing job: %w", err)
+	}
+	if !json.Valid(event.Payload) {
+		return UploadRecord{}, fmt.Errorf("outbox payload is not valid json")
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO event_outbox
+			(id, event_type, event_version, routing_key, organization_id, document_id, payload, status, next_attempt_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $8)
+		ON CONFLICT (id) DO NOTHING`,
+		event.ID, event.EventType, event.EventVersion, event.RoutingKey, event.OrganizationID,
+		event.DocumentID, event.Payload, now)
+	if err != nil {
+		return UploadRecord{}, fmt.Errorf("queue confirmed upload event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return UploadRecord{}, fmt.Errorf("commit upload confirmation: %w", err)
+	}
+	upload.Status, upload.SizeBytes, upload.Checksum, upload.ConfirmedAt = "confirmed", sizeBytes, checksum, &now
+	return upload, nil
 }
 
 func (s *PostgresStore) UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, event OutboxEvent) (Document, error) {
@@ -226,9 +345,12 @@ func (s *PostgresStore) uploadDocument(ctx context.Context, organizationID, docu
 	if upload.IdempotencyKey != "" {
 		var existing UploadRecord
 		err := tx.QueryRow(ctx, `
-			SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref, idempotency_key, created_at
+			SELECT id, document_id, organization_id, filename, content_type, size_bytes, checksum, storage_ref,
+				idempotency_key, status, upload_method, expected_size_bytes, confirmed_at, created_at
 			FROM uploads WHERE organization_id = $1 AND idempotency_key = $2`,
-			organizationID, upload.IdempotencyKey).Scan(&existing.ID, &existing.DocumentID, &existing.OrganizationID, &existing.Filename, &existing.ContentType, &existing.SizeBytes, &existing.Checksum, &existing.StorageRef, &existing.IdempotencyKey, &existing.CreatedAt)
+			organizationID, upload.IdempotencyKey).Scan(&existing.ID, &existing.DocumentID, &existing.OrganizationID, &existing.Filename, &existing.ContentType,
+			&existing.SizeBytes, &existing.Checksum, &existing.StorageRef, &existing.IdempotencyKey, &existing.Status,
+			&existing.UploadMethod, &existing.ExpectedSize, &existing.ConfirmedAt, &existing.CreatedAt)
 		if err == nil {
 			doc, getErr := s.getDocumentTx(ctx, tx, organizationID, documentID)
 			if getErr != nil {

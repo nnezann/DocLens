@@ -8,6 +8,8 @@ service DocumentIntakeService {
   rpc CreateDocument(CreateDocumentRequest) returns (Document);
   rpc GetDocument(GetDocumentRequest) returns (Document);
   rpc UploadDocument(UploadDocumentRequest) returns (UploadDocumentResponse);
+  rpc CreateUploadIntent(CreateUploadIntentRequest) returns (CreateUploadIntentResponse);
+  rpc CompleteUpload(CompleteUploadRequest) returns (UploadDocumentResponse);
   rpc GetDocumentStatus(GetDocumentStatusRequest) returns (DocumentStatus);
 }
 
@@ -38,6 +40,32 @@ message UploadDocumentResponse {
   string document_id = 2;
   string storage_ref = 3;
   string checksum = 4;
+}
+
+message CreateUploadIntentRequest {
+  string organization_id = 1;
+  string document_id = 2;
+  string filename = 3;
+  string content_type = 4;
+  int64 size_bytes = 5;
+  string checksum = 6;
+  string idempotency_key = 7;
+}
+
+message CreateUploadIntentResponse {
+  string upload_id = 1;
+  string document_id = 2;
+  string upload_url = 3;
+  string storage_ref = 4;
+  string expires_at = 5;
+}
+
+message CompleteUploadRequest {
+  string organization_id = 1;
+  string document_id = 2;
+  string upload_id = 3;
+  int64 size_bytes = 4;
+  string checksum = 5;
 }
 
 message GetDocumentStatusRequest {
@@ -71,4 +99,7 @@ message Upload {
   string checksum = 5;
   string storage_ref = 6;
   string created_at = 7;
+  string status = 8;
+  string upload_method = 9;
+  string confirmed_at = 10;
 }

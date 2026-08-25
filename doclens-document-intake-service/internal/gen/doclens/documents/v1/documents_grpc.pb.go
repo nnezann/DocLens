@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.35.1
-// source: proto/doclens/documents/v1/documents.proto
+// source: doclens/documents/v1/documents.proto
 
 package documentsv1
 
@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DocumentIntakeService_CreateDocument_FullMethodName    = "/doclens.documents.v1.DocumentIntakeService/CreateDocument"
-	DocumentIntakeService_GetDocument_FullMethodName       = "/doclens.documents.v1.DocumentIntakeService/GetDocument"
-	DocumentIntakeService_UploadDocument_FullMethodName    = "/doclens.documents.v1.DocumentIntakeService/UploadDocument"
-	DocumentIntakeService_GetDocumentStatus_FullMethodName = "/doclens.documents.v1.DocumentIntakeService/GetDocumentStatus"
+	DocumentIntakeService_CreateDocument_FullMethodName     = "/doclens.documents.v1.DocumentIntakeService/CreateDocument"
+	DocumentIntakeService_GetDocument_FullMethodName        = "/doclens.documents.v1.DocumentIntakeService/GetDocument"
+	DocumentIntakeService_UploadDocument_FullMethodName     = "/doclens.documents.v1.DocumentIntakeService/UploadDocument"
+	DocumentIntakeService_CreateUploadIntent_FullMethodName = "/doclens.documents.v1.DocumentIntakeService/CreateUploadIntent"
+	DocumentIntakeService_CompleteUpload_FullMethodName     = "/doclens.documents.v1.DocumentIntakeService/CompleteUpload"
+	DocumentIntakeService_GetDocumentStatus_FullMethodName  = "/doclens.documents.v1.DocumentIntakeService/GetDocumentStatus"
 )
 
 // DocumentIntakeServiceClient is the client API for DocumentIntakeService service.
@@ -32,6 +34,8 @@ type DocumentIntakeServiceClient interface {
 	CreateDocument(ctx context.Context, in *CreateDocumentRequest, opts ...grpc.CallOption) (*Document, error)
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
 	UploadDocument(ctx context.Context, in *UploadDocumentRequest, opts ...grpc.CallOption) (*UploadDocumentResponse, error)
+	CreateUploadIntent(ctx context.Context, in *CreateUploadIntentRequest, opts ...grpc.CallOption) (*CreateUploadIntentResponse, error)
+	CompleteUpload(ctx context.Context, in *CompleteUploadRequest, opts ...grpc.CallOption) (*UploadDocumentResponse, error)
 	GetDocumentStatus(ctx context.Context, in *GetDocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatus, error)
 }
 
@@ -73,6 +77,26 @@ func (c *documentIntakeServiceClient) UploadDocument(ctx context.Context, in *Up
 	return out, nil
 }
 
+func (c *documentIntakeServiceClient) CreateUploadIntent(ctx context.Context, in *CreateUploadIntentRequest, opts ...grpc.CallOption) (*CreateUploadIntentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUploadIntentResponse)
+	err := c.cc.Invoke(ctx, DocumentIntakeService_CreateUploadIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *documentIntakeServiceClient) CompleteUpload(ctx context.Context, in *CompleteUploadRequest, opts ...grpc.CallOption) (*UploadDocumentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadDocumentResponse)
+	err := c.cc.Invoke(ctx, DocumentIntakeService_CompleteUpload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *documentIntakeServiceClient) GetDocumentStatus(ctx context.Context, in *GetDocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DocumentStatus)
@@ -90,6 +114,8 @@ type DocumentIntakeServiceServer interface {
 	CreateDocument(context.Context, *CreateDocumentRequest) (*Document, error)
 	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)
 	UploadDocument(context.Context, *UploadDocumentRequest) (*UploadDocumentResponse, error)
+	CreateUploadIntent(context.Context, *CreateUploadIntentRequest) (*CreateUploadIntentResponse, error)
+	CompleteUpload(context.Context, *CompleteUploadRequest) (*UploadDocumentResponse, error)
 	GetDocumentStatus(context.Context, *GetDocumentStatusRequest) (*DocumentStatus, error)
 	mustEmbedUnimplementedDocumentIntakeServiceServer()
 }
@@ -109,6 +135,12 @@ func (UnimplementedDocumentIntakeServiceServer) GetDocument(context.Context, *Ge
 }
 func (UnimplementedDocumentIntakeServiceServer) UploadDocument(context.Context, *UploadDocumentRequest) (*UploadDocumentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UploadDocument not implemented")
+}
+func (UnimplementedDocumentIntakeServiceServer) CreateUploadIntent(context.Context, *CreateUploadIntentRequest) (*CreateUploadIntentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateUploadIntent not implemented")
+}
+func (UnimplementedDocumentIntakeServiceServer) CompleteUpload(context.Context, *CompleteUploadRequest) (*UploadDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteUpload not implemented")
 }
 func (UnimplementedDocumentIntakeServiceServer) GetDocumentStatus(context.Context, *GetDocumentStatusRequest) (*DocumentStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDocumentStatus not implemented")
@@ -188,6 +220,42 @@ func _DocumentIntakeService_UploadDocument_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DocumentIntakeService_CreateUploadIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUploadIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DocumentIntakeServiceServer).CreateUploadIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DocumentIntakeService_CreateUploadIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DocumentIntakeServiceServer).CreateUploadIntent(ctx, req.(*CreateUploadIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DocumentIntakeService_CompleteUpload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteUploadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DocumentIntakeServiceServer).CompleteUpload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DocumentIntakeService_CompleteUpload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DocumentIntakeServiceServer).CompleteUpload(ctx, req.(*CompleteUploadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DocumentIntakeService_GetDocumentStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetDocumentStatusRequest)
 	if err := dec(in); err != nil {
@@ -226,10 +294,18 @@ var DocumentIntakeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DocumentIntakeService_UploadDocument_Handler,
 		},
 		{
+			MethodName: "CreateUploadIntent",
+			Handler:    _DocumentIntakeService_CreateUploadIntent_Handler,
+		},
+		{
+			MethodName: "CompleteUpload",
+			Handler:    _DocumentIntakeService_CompleteUpload_Handler,
+		},
+		{
 			MethodName: "GetDocumentStatus",
 			Handler:    _DocumentIntakeService_GetDocumentStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/doclens/documents/v1/documents.proto",
+	Metadata: "doclens/documents/v1/documents.proto",
 }

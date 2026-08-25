@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -41,4 +42,37 @@ func (s *R2ObjectStorage) Put(ctx context.Context, organizationID, documentID, f
 		return "", fmt.Errorf("put object: %w", err)
 	}
 	return key, nil
+}
+
+func (s *R2ObjectStorage) PresignPut(ctx context.Context, organizationID, documentID, uploadID, filename, contentType string, expires time.Duration) (string, string, time.Time, error) {
+	key := objectKey(organizationID, documentID, uploadID, filename)
+	presigner := s3.NewPresignClient(s.client)
+	result, err := presigner.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), ContentType: aws.String(contentType),
+	}, func(options *s3.PresignOptions) { options.Expires = expires })
+	if err != nil {
+		return "", "", time.Time{}, fmt.Errorf("presign upload: %w", err)
+	}
+	return result.URL, key, time.Now().UTC().Add(expires), nil
+}
+
+func (s *R2ObjectStorage) Head(ctx context.Context, storageRef string) (ObjectHead, error) {
+	result, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(storageRef)})
+	if err != nil {
+		return ObjectHead{}, fmt.Errorf("head object: %w", err)
+	}
+	head := ObjectHead{}
+	if result.ContentLength != nil {
+		head.SizeBytes = *result.ContentLength
+	}
+	if result.ChecksumSHA256 != nil {
+		head.Checksum = *result.ChecksumSHA256
+	}
+	return head, nil
+}
+
+func objectKey(organizationID, documentID, uploadID, filename string) string {
+	return fmt.Sprintf("organizations/%s/documents/%s/uploads/%s-%s",
+		url.PathEscape(organizationID), url.PathEscape(documentID), url.PathEscape(uploadID),
+		url.PathEscape(sanitizeFilename(filename)))
 }

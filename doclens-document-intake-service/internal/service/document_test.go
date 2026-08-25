@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
@@ -113,6 +114,7 @@ func TestTenantIsolationOnGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new object storage: %v", err)
 	}
+
 	service := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
 
 	created, err := service.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{
@@ -132,5 +134,63 @@ func TestTenantIsolationOnGet(t *testing.T) {
 	)), &documentsv1.GetDocumentRequest{OrganizationId: "org_2", Id: created.GetId()})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("expected NotFound, got %v", err)
+	}
+}
+
+func TestDirectUploadIntentAndConfirmation(t *testing.T) {
+	storage, err := store.NewLocalObjectStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new object storage: %v", err)
+	}
+	svc := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
+	created, err := svc.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{OrganizationId: "org_1", Type: "certificate"})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	intent, err := svc.CreateUploadIntent(authenticatedContext(), &documentsv1.CreateUploadIntentRequest{
+		OrganizationId: "org_1", DocumentId: created.GetId(), Filename: "front.pdf", ContentType: "application/pdf", SizeBytes: 12,
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	content := []byte("%PDF-1.4\nabc")
+	if err := os.WriteFile(intent.GetStorageRef(), content, 0o600); err != nil {
+		t.Fatalf("write direct object: %v", err)
+	}
+	confirmed, err := svc.CompleteUpload(authenticatedContext(), &documentsv1.CompleteUploadRequest{
+		OrganizationId: "org_1", DocumentId: created.GetId(), UploadId: intent.GetUploadId(), SizeBytes: int64(len(content)),
+	})
+	if err != nil {
+		t.Fatalf("complete upload: %v", err)
+	}
+	if confirmed.GetUploadId() != intent.GetUploadId() {
+		t.Fatalf("upload id mismatch: %q", confirmed.GetUploadId())
+	}
+}
+
+func TestDirectUploadRejectsSizeMismatch(t *testing.T) {
+	storage, err := store.NewLocalObjectStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("new object storage: %v", err)
+	}
+	svc := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
+	created, err := svc.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{OrganizationId: "org_1", Type: "certificate"})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	intent, err := svc.CreateUploadIntent(authenticatedContext(), &documentsv1.CreateUploadIntentRequest{
+		OrganizationId: "org_1", DocumentId: created.GetId(), Filename: "front.pdf", ContentType: "application/pdf", SizeBytes: 12,
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := os.WriteFile(intent.GetStorageRef(), []byte("short"), 0o600); err != nil {
+		t.Fatalf("write direct object: %v", err)
+	}
+	_, err = svc.CompleteUpload(authenticatedContext(), &documentsv1.CompleteUploadRequest{
+		OrganizationId: "org_1", DocumentId: created.GetId(), UploadId: intent.GetUploadId(), SizeBytes: 12,
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status = %v, want InvalidArgument", status.Code(err))
 	}
 }

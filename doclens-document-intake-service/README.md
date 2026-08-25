@@ -22,6 +22,8 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 - `CreateDocument`: creates a logical document record
 - `GetDocument`: fetches a document by tenant and ID
 - `UploadDocument`: stores physical bytes and returns upload metadata/checksum
+- `CreateUploadIntent`: creates a pending upload and returns a pre-signed PUT URL
+- `CompleteUpload`: verifies the direct-to-storage object and confirms the upload
 - `GetDocumentStatus`: returns the current lifecycle and processing status
 
 ## Configuration
@@ -29,6 +31,7 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `DOCUMENT_INTAKE_GRPC_ADDR` | `:9002` | gRPC listening address |
+| `DOCUMENT_INTAKE_METRICS_ADDR` | `:9092` | Prometheus metrics HTTP address |
 | `DOCUMENT_INTAKE_STORAGE_DIR` | `./data/documents` | Local object-store directory |
 | `DOCUMENT_INTAKE_MAX_UPLOAD_BYTES` | `10485760` | 10 MiB per upload |
 | `DOCUMENT_INTAKE_ALLOWED_CONTENT_TYPES` | `application/pdf,image/jpeg,image/png,image/webp` | Allowed upload types |
@@ -39,6 +42,11 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 | `R2_BUCKET` | empty | R2 bucket name |
 | `RABBITMQ_URL` | empty | RabbitMQ connection URL; requires `DATABASE_URL` |
 | `RABBITMQ_EXCHANGE` | `doclens.events` | Durable topic exchange for outbox events |
+| `DOCUMENT_INTAKE_UPLOAD_WORKERS` | `8` | Maximum concurrent proxied uploads |
+| `DOCUMENT_INTAKE_TENANT_UPLOAD_RATE` | `5` | Per-organization proxied-upload tokens per second |
+| `DOCUMENT_INTAKE_TENANT_UPLOAD_BURST` | `10` | Per-organization token bucket capacity |
+| `DOCUMENT_INTAKE_STORAGE_FAILURE_THRESHOLD` | `5` | Object-storage failures before circuit opening |
+| `DOCUMENT_INTAKE_STORAGE_CIRCUIT_OPEN` | `30s` | Circuit-breaker open duration |
 
 ## Run
 
@@ -50,6 +58,16 @@ go run ./cmd/document-intake
 The service uses a local object-store adapter by default. Configure all R2 variables to use Cloudflare R2. Configure `DATABASE_URL` to use PostgreSQL; otherwise the in-memory metadata store is used only for local development.
 
 When both `DATABASE_URL` and `RABBITMQ_URL` are configured, uploads write a durable `DocumentUploaded` outbox record in the same PostgreSQL transaction as their metadata. A background publisher retries pending records and publishes them with routing key `document.uploaded` and persistent delivery mode. Consumers should deduplicate using the envelope `event_id`/AMQP `message_id`.
+
+For the primary upload path, call `CreateUploadIntent`, upload bytes to the returned
+URL, then call `CompleteUpload`. Intents remain `pending` until a storage `HEAD`
+matches the declared size/checksum; confirmation and outbox insertion are
+transactional. `UploadDocument` is the bounded proxied fallback and returns
+`ResourceExhausted` with `retry-after` metadata when its pool or tenant limiter
+rejects admission. `original_ref`/`storage_ref` is write-once per upload and is
+never transformed by this service. Provider notification adapters can call
+`ConfirmUploadNotification` with the same upload identity and verification
+metadata, so notification-driven and client-driven confirmation share one path.
 
 ## Authorization
 
