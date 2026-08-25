@@ -7,8 +7,16 @@ import (
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
 	"github.com/doclens/document-intake-service/internal/store"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+func authenticatedContext() context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-organization-id", "org_1",
+		"x-roles", "org_admin",
+	))
+}
 
 func TestCreateAndGetDocument(t *testing.T) {
 	storage, err := store.NewLocalObjectStorage(t.TempDir())
@@ -17,7 +25,7 @@ func TestCreateAndGetDocument(t *testing.T) {
 	}
 	service := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
 
-	resp, err := service.CreateDocument(context.Background(), &documentsv1.CreateDocumentRequest{
+	resp, err := service.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{
 		OrganizationId: "org_1",
 		Type:           "certificate",
 		Filename:       "certificate.pdf",
@@ -34,7 +42,7 @@ func TestCreateAndGetDocument(t *testing.T) {
 		t.Fatalf("status mismatch: %q", resp.GetStatus())
 	}
 
-	got, err := service.GetDocument(context.Background(), &documentsv1.GetDocumentRequest{OrganizationId: "org_1", Id: resp.GetId()})
+	got, err := service.GetDocument(authenticatedContext(), &documentsv1.GetDocumentRequest{OrganizationId: "org_1", Id: resp.GetId()})
 	if err != nil {
 		t.Fatalf("get document: %v", err)
 	}
@@ -50,7 +58,7 @@ func TestUploadDocumentAndStatus(t *testing.T) {
 	}
 	service := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
 
-	created, err := service.CreateDocument(context.Background(), &documentsv1.CreateDocumentRequest{
+	created, err := service.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{
 		OrganizationId: "org_1",
 		Type:           "certificate",
 		Filename:       "certificate.pdf",
@@ -60,7 +68,7 @@ func TestUploadDocumentAndStatus(t *testing.T) {
 		t.Fatalf("create document: %v", err)
 	}
 
-	uploaded, err := service.UploadDocument(context.Background(), &documentsv1.UploadDocumentRequest{
+	uploaded, err := service.UploadDocument(authenticatedContext(), &documentsv1.UploadDocumentRequest{
 		OrganizationId: "org_1",
 		DocumentId:     created.GetId(),
 		Filename:       "front.pdf",
@@ -75,7 +83,7 @@ func TestUploadDocumentAndStatus(t *testing.T) {
 		t.Fatalf("upload document id mismatch: %q != %q", uploaded.GetDocumentId(), created.GetId())
 	}
 
-	statusResp, err := service.GetDocumentStatus(context.Background(), &documentsv1.GetDocumentStatusRequest{
+	statusResp, err := service.GetDocumentStatus(authenticatedContext(), &documentsv1.GetDocumentStatusRequest{
 		OrganizationId: "org_1",
 		DocumentId:     created.GetId(),
 	})
@@ -97,7 +105,7 @@ func TestTenantIsolationOnGet(t *testing.T) {
 	}
 	service := NewService(store.NewMemoryStore(), storage, 10*1024*1024, []string{"application/pdf"})
 
-	created, err := service.CreateDocument(context.Background(), &documentsv1.CreateDocumentRequest{
+	created, err := service.CreateDocument(authenticatedContext(), &documentsv1.CreateDocumentRequest{
 		OrganizationId: "org_1",
 		Type:           "certificate",
 		Filename:       "certificate.pdf",
@@ -108,7 +116,10 @@ func TestTenantIsolationOnGet(t *testing.T) {
 		t.Fatalf("create document: %v", err)
 	}
 
-	_, err = service.GetDocument(context.Background(), &documentsv1.GetDocumentRequest{OrganizationId: "org_2", Id: created.GetId()})
+	_, err = service.GetDocument(metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-organization-id", "org_2",
+		"x-roles", "org_admin",
+	)), &documentsv1.GetDocumentRequest{OrganizationId: "org_2", Id: created.GetId()})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("expected NotFound, got %v", err)
 	}

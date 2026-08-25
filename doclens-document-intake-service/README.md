@@ -50,3 +50,12 @@ go run ./cmd/document-intake
 The service uses a local object-store adapter by default. Configure all R2 variables to use Cloudflare R2. Configure `DATABASE_URL` to use PostgreSQL; otherwise the in-memory metadata store is used only for local development.
 
 When both `DATABASE_URL` and `RABBITMQ_URL` are configured, uploads write a durable `DocumentUploaded` outbox record in the same PostgreSQL transaction as their metadata. A background publisher retries pending records and publishes them with routing key `document.uploaded` and persistent delivery mode. Consumers should deduplicate using the envelope `event_id`/AMQP `message_id`.
+
+## Authorization
+
+The gRPC service requires authenticated Gateway metadata on document operations:
+`x-organization-id` must match the request tenant and `x-roles` must contain an
+allowed role. Document reads/status checks require a document-read permission;
+creation and uploads require their corresponding document permissions. The
+current allowed organization roles are `platform_admin`, `org_admin`, `reviewer`,
+`analyst`, `user`, and the existing `member` compatibility role.

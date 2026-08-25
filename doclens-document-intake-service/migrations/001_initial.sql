@@ -18,6 +18,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS documents_organization_id_id_key
 CREATE INDEX IF NOT EXISTS documents_organization_id_idx
     ON documents (organization_id, id);
 
+CREATE TABLE IF NOT EXISTS processing_jobs (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'queued', 'processing', 'processed', 'failed')),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (organization_id, document_id)
+        REFERENCES documents (organization_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS processing_jobs_document_idx
+    ON processing_jobs (organization_id, document_id);
+
 CREATE TABLE IF NOT EXISTS uploads (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,

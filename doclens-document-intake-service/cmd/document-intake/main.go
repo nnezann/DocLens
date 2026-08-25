@@ -14,6 +14,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/doclens/document-intake-service/internal/authz"
 	"github.com/doclens/document-intake-service/internal/config"
 	"github.com/doclens/document-intake-service/internal/events"
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
@@ -118,7 +119,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.UnaryInterceptor(authz.UnaryServerInterceptor()))
 	documentsv1.RegisterDocumentIntakeServiceServer(server, documentService)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthv1.HealthCheckResponse_SERVING)

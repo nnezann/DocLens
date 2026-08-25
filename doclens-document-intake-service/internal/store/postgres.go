@@ -104,6 +104,14 @@ func (s *PostgresStore) CreateDocument(ctx context.Context, doc Document) (Docum
 	if err != nil {
 		return Document{}, fmt.Errorf("insert document: %w", err)
 	}
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO processing_jobs
+			(id, document_id, organization_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		"job_"+doc.ID, doc.ID, doc.OrganizationID, doc.ProcessingJobStatus, doc.CreatedAt, doc.UpdatedAt)
+	if err != nil {
+		return Document{}, fmt.Errorf("insert processing job: %w", err)
+	}
 	return doc, nil
 }
 
@@ -199,6 +207,15 @@ func (s *PostgresStore) uploadDocument(ctx context.Context, organizationID, docu
 		upload.StorageRef, upload.SizeBytes, now, organizationID, documentID)
 	if err != nil {
 		return Document{}, fmt.Errorf("update document status: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO processing_jobs
+			(id, document_id, organization_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, 'queued', $4, $4)
+		ON CONFLICT (id) DO UPDATE SET status = 'queued', updated_at = EXCLUDED.updated_at`,
+		"job_"+documentID, documentID, organizationID, now)
+	if err != nil {
+		return Document{}, fmt.Errorf("update processing job: %w", err)
 	}
 	if event != nil {
 		if !json.Valid(event.Payload) {

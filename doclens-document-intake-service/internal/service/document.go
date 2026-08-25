@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/doclens/document-intake-service/internal/authz"
 	"github.com/doclens/document-intake-service/internal/events"
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
 	"github.com/doclens/document-intake-service/internal/store"
@@ -67,6 +68,9 @@ func (s *Service) CreateDocument(ctx context.Context, req *documentsv1.CreateDoc
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 	organizationID := strings.TrimSpace(req.GetOrganizationId())
+	if err := authz.Require(ctx, organizationID, authz.PermissionCreate); err != nil {
+		return nil, err
+	}
 	if organizationID == "" {
 		return nil, status.Error(codes.InvalidArgument, "organization_id is required")
 	}
@@ -136,6 +140,9 @@ func (s *Service) GetDocument(ctx context.Context, req *documentsv1.GetDocumentR
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 	organizationID := strings.TrimSpace(req.GetOrganizationId())
+	if err := authz.Require(ctx, organizationID, authz.PermissionRead); err != nil {
+		return nil, err
+	}
 	if organizationID == "" {
 		return nil, status.Error(codes.InvalidArgument, "organization_id is required")
 	}
@@ -157,6 +164,9 @@ func (s *Service) UploadDocument(ctx context.Context, req *documentsv1.UploadDoc
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 	organizationID := strings.TrimSpace(req.GetOrganizationId())
+	if err := authz.Require(ctx, organizationID, authz.PermissionUpload); err != nil {
+		return nil, err
+	}
 	if organizationID == "" {
 		return nil, status.Error(codes.InvalidArgument, "organization_id is required")
 	}
@@ -248,6 +258,9 @@ func (s *Service) GetDocumentStatus(ctx context.Context, req *documentsv1.GetDoc
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 	organizationID := strings.TrimSpace(req.GetOrganizationId())
+	if err := authz.Require(ctx, organizationID, authz.PermissionRead); err != nil {
+		return nil, err
+	}
 	if organizationID == "" {
 		return nil, status.Error(codes.InvalidArgument, "organization_id is required")
 	}
