@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DocumentIntakeService_CreateDocument_FullMethodName = "/doclens.documents.v1.DocumentIntakeService/CreateDocument"
-	DocumentIntakeService_GetDocument_FullMethodName    = "/doclens.documents.v1.DocumentIntakeService/GetDocument"
+	DocumentIntakeService_CreateDocument_FullMethodName    = "/doclens.documents.v1.DocumentIntakeService/CreateDocument"
+	DocumentIntakeService_GetDocument_FullMethodName       = "/doclens.documents.v1.DocumentIntakeService/GetDocument"
+	DocumentIntakeService_UploadDocument_FullMethodName    = "/doclens.documents.v1.DocumentIntakeService/UploadDocument"
+	DocumentIntakeService_GetDocumentStatus_FullMethodName = "/doclens.documents.v1.DocumentIntakeService/GetDocumentStatus"
 )
 
 // DocumentIntakeServiceClient is the client API for DocumentIntakeService service.
@@ -29,6 +31,8 @@ const (
 type DocumentIntakeServiceClient interface {
 	CreateDocument(ctx context.Context, in *CreateDocumentRequest, opts ...grpc.CallOption) (*Document, error)
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
+	UploadDocument(ctx context.Context, in *UploadDocumentRequest, opts ...grpc.CallOption) (*UploadDocumentResponse, error)
+	GetDocumentStatus(ctx context.Context, in *GetDocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatus, error)
 }
 
 type documentIntakeServiceClient struct {
@@ -59,12 +63,34 @@ func (c *documentIntakeServiceClient) GetDocument(ctx context.Context, in *GetDo
 	return out, nil
 }
 
+func (c *documentIntakeServiceClient) UploadDocument(ctx context.Context, in *UploadDocumentRequest, opts ...grpc.CallOption) (*UploadDocumentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadDocumentResponse)
+	err := c.cc.Invoke(ctx, DocumentIntakeService_UploadDocument_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *documentIntakeServiceClient) GetDocumentStatus(ctx context.Context, in *GetDocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocumentStatus)
+	err := c.cc.Invoke(ctx, DocumentIntakeService_GetDocumentStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DocumentIntakeServiceServer is the server API for DocumentIntakeService service.
 // All implementations must embed UnimplementedDocumentIntakeServiceServer
 // for forward compatibility.
 type DocumentIntakeServiceServer interface {
 	CreateDocument(context.Context, *CreateDocumentRequest) (*Document, error)
 	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)
+	UploadDocument(context.Context, *UploadDocumentRequest) (*UploadDocumentResponse, error)
+	GetDocumentStatus(context.Context, *GetDocumentStatusRequest) (*DocumentStatus, error)
 	mustEmbedUnimplementedDocumentIntakeServiceServer()
 }
 
@@ -80,6 +106,12 @@ func (UnimplementedDocumentIntakeServiceServer) CreateDocument(context.Context, 
 }
 func (UnimplementedDocumentIntakeServiceServer) GetDocument(context.Context, *GetDocumentRequest) (*Document, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDocument not implemented")
+}
+func (UnimplementedDocumentIntakeServiceServer) UploadDocument(context.Context, *UploadDocumentRequest) (*UploadDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UploadDocument not implemented")
+}
+func (UnimplementedDocumentIntakeServiceServer) GetDocumentStatus(context.Context, *GetDocumentStatusRequest) (*DocumentStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDocumentStatus not implemented")
 }
 func (UnimplementedDocumentIntakeServiceServer) mustEmbedUnimplementedDocumentIntakeServiceServer() {}
 func (UnimplementedDocumentIntakeServiceServer) testEmbeddedByValue()                               {}
@@ -138,6 +170,42 @@ func _DocumentIntakeService_GetDocument_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DocumentIntakeService_UploadDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DocumentIntakeServiceServer).UploadDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DocumentIntakeService_UploadDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DocumentIntakeServiceServer).UploadDocument(ctx, req.(*UploadDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DocumentIntakeService_GetDocumentStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDocumentStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DocumentIntakeServiceServer).GetDocumentStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DocumentIntakeService_GetDocumentStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DocumentIntakeServiceServer).GetDocumentStatus(ctx, req.(*GetDocumentStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DocumentIntakeService_ServiceDesc is the grpc.ServiceDesc for DocumentIntakeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +220,14 @@ var DocumentIntakeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDocument",
 			Handler:    _DocumentIntakeService_GetDocument_Handler,
+		},
+		{
+			MethodName: "UploadDocument",
+			Handler:    _DocumentIntakeService_UploadDocument_Handler,
+		},
+		{
+			MethodName: "GetDocumentStatus",
+			Handler:    _DocumentIntakeService_GetDocumentStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
