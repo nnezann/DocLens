@@ -50,6 +50,21 @@ type Store interface {
 	GetDocumentStatus(ctx context.Context, organizationID, documentID string) (Document, error)
 }
 
+type OutboxEvent struct {
+	ID             string
+	EventType      string
+	EventVersion   int
+	RoutingKey     string
+	OrganizationID string
+	DocumentID     string
+	Payload        []byte
+	CreatedAt      time.Time
+}
+
+type DurableUploadStore interface {
+	UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, event OutboxEvent) (Document, error)
+}
+
 type MemoryStore struct {
 	mu   sync.RWMutex
 	docs map[string]Document
@@ -108,6 +123,10 @@ func (m *MemoryStore) UploadDocument(_ context.Context, organizationID, document
 	}
 	m.docs[documentID] = doc
 	return doc, nil
+}
+
+func (m *MemoryStore) UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, _ OutboxEvent) (Document, error) {
+	return m.UploadDocument(ctx, organizationID, documentID, upload)
 }
 
 func (m *MemoryStore) GetDocumentStatus(_ context.Context, organizationID, documentID string) (Document, error) {

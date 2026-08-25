@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/doclens/document-intake-service/internal/events"
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
 	"github.com/doclens/document-intake-service/internal/store"
 	"google.golang.org/grpc/codes"
@@ -217,12 +218,22 @@ func (s *Service) UploadDocument(ctx context.Context, req *documentsv1.UploadDoc
 		IdempotencyKey: req.GetIdempotencyKey(),
 		CreatedAt:      time.Now().UTC(),
 	}
-	updatedDoc, err := s.store.UploadDocument(ctx, organizationID, documentID, upload)
+	docForEvent := doc
+	event, err := events.NewDocumentUploaded(newID("evt"), docForEvent, upload)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "persist upload metadata: %v", err)
+		return nil, status.Errorf(codes.Internal, "build document uploaded event: %v", err)
 	}
-	if err := s.publisher.PublishDocumentUploaded(ctx, organizationID, updatedDoc.ID, upload); err != nil {
-		return nil, status.Errorf(codes.Internal, "publish document uploaded event: %v", err)
+	var updatedDoc store.Document
+	if durableStore, ok := s.store.(store.DurableUploadStore); ok {
+		updatedDoc, err = durableStore.UploadDocumentAndQueue(ctx, organizationID, documentID, upload, event)
+	} else {
+		updatedDoc, err = s.store.UploadDocument(ctx, organizationID, documentID, upload)
+		if err == nil {
+			err = s.publisher.PublishDocumentUploaded(ctx, organizationID, updatedDoc.ID, upload)
+		}
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "persist upload and event: %v", err)
 	}
 	return &documentsv1.UploadDocumentResponse{
 		UploadId:   upload.ID,

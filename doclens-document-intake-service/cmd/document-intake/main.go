@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/doclens/document-intake-service/internal/config"
+	"github.com/doclens/document-intake-service/internal/events"
 	documentsv1 "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1"
 	"github.com/doclens/document-intake-service/internal/observability"
 	"github.com/doclens/document-intake-service/internal/service"
@@ -88,6 +89,22 @@ func main() {
 		metadataStore = postgresStore
 		logger.Info("using postgres metadata store")
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if cfg.RabbitMQURL != "" {
+		if postgresStore == nil {
+			logger.Error("rabbitmq requires postgres", slog.String("error", "set DATABASE_URL when RABBITMQ_URL is configured"))
+			os.Exit(1)
+		}
+		rabbitPublisher, err := events.NewRabbitPublisher(cfg.RabbitMQURL, cfg.RabbitMQExchange, logger)
+		if err != nil {
+			logger.Error("initialize rabbitmq publisher", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		defer rabbitPublisher.Close()
+		go events.RunOutboxPublisher(ctx, postgresStore, rabbitPublisher, logger)
+		logger.Info("rabbitmq outbox publisher enabled", slog.String("exchange", cfg.RabbitMQExchange))
+	}
 	documentService := service.NewService(
 		metadataStore,
 		objectStorage,
@@ -107,8 +124,6 @@ func main() {
 	healthServer.SetServingStatus("", healthv1.HealthCheckResponse_SERVING)
 	healthv1.RegisterHealthServer(server, healthServer)
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	go func() {
 		<-ctx.Done()
 		server.GracefulStop()

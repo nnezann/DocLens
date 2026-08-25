@@ -37,6 +37,8 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 | `R2_ACCESS_KEY_ID` | empty | R2 API token access key |
 | `R2_SECRET_ACCESS_KEY` | empty | R2 API token secret |
 | `R2_BUCKET` | empty | R2 bucket name |
+| `RABBITMQ_URL` | empty | RabbitMQ connection URL; requires `DATABASE_URL` |
+| `RABBITMQ_EXCHANGE` | `doclens.events` | Durable topic exchange for outbox events |
 
 ## Run
 
@@ -46,3 +48,5 @@ go run ./cmd/document-intake
 ```
 
 The service uses a local object-store adapter by default. Configure all R2 variables to use Cloudflare R2. Configure `DATABASE_URL` to use PostgreSQL; otherwise the in-memory metadata store is used only for local development.
+
+When both `DATABASE_URL` and `RABBITMQ_URL` are configured, uploads write a durable `DocumentUploaded` outbox record in the same PostgreSQL transaction as their metadata. A background publisher retries pending records and publishes them with routing key `document.uploaded` and persistent delivery mode. Consumers should deduplicate using the envelope `event_id`/AMQP `message_id`.

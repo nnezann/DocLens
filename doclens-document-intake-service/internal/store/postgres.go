@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -12,6 +13,13 @@ import (
 
 type PostgresStore struct {
 	pool *pgxpool.Pool
+}
+
+type OutboxRecord struct {
+	ID           string
+	RoutingKey   string
+	Payload      []byte
+	AttemptCount int
 }
 
 func NewPostgresStore(ctx context.Context, databaseURL string) (*PostgresStore, error) {
@@ -39,6 +47,50 @@ func (s *PostgresStore) Close() {
 
 func (s *PostgresStore) Migrate(ctx context.Context, migration string) error {
 	_, err := s.pool.Exec(ctx, migration)
+	return err
+}
+
+func (s *PostgresStore) ClaimOutbox(ctx context.Context, limit int) ([]OutboxRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		WITH claimed AS (
+			SELECT id
+			FROM event_outbox
+			WHERE status IN ('pending', 'failed') AND next_attempt_at <= NOW()
+			ORDER BY next_attempt_at, created_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT $1
+		)
+		UPDATE event_outbox e
+		SET status = 'publishing', attempt_count = e.attempt_count + 1
+		FROM claimed
+		WHERE e.id = claimed.id
+		RETURNING e.id, e.routing_key, e.payload, e.attempt_count`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("claim event outbox records: %w", err)
+	}
+	defer rows.Close()
+	var records []OutboxRecord
+	for rows.Next() {
+		var record OutboxRecord
+		if err := rows.Scan(&record.ID, &record.RoutingKey, &record.Payload, &record.AttemptCount); err != nil {
+			return nil, fmt.Errorf("scan event outbox record: %w", err)
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (s *PostgresStore) MarkOutboxPublished(ctx context.Context, id string, publishedAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE event_outbox SET status = 'published', published_at = $1, last_error = ''
+		WHERE id = $2`, publishedAt, id)
+	return err
+}
+
+func (s *PostgresStore) MarkOutboxFailed(ctx context.Context, id, lastError string, nextAttemptAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE event_outbox SET status = 'failed', last_error = LEFT($1, 1000), next_attempt_at = $2
+		WHERE id = $3`, lastError, nextAttemptAt, id)
 	return err
 }
 
@@ -89,6 +141,14 @@ func (s *PostgresStore) GetDocument(ctx context.Context, organizationID, id stri
 }
 
 func (s *PostgresStore) UploadDocument(ctx context.Context, organizationID, documentID string, upload UploadRecord) (Document, error) {
+	return s.uploadDocument(ctx, organizationID, documentID, upload, nil)
+}
+
+func (s *PostgresStore) UploadDocumentAndQueue(ctx context.Context, organizationID, documentID string, upload UploadRecord, event OutboxEvent) (Document, error) {
+	return s.uploadDocument(ctx, organizationID, documentID, upload, &event)
+}
+
+func (s *PostgresStore) uploadDocument(ctx context.Context, organizationID, documentID string, upload UploadRecord, event *OutboxEvent) (Document, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Document{}, fmt.Errorf("begin upload transaction: %w", err)
@@ -139,6 +199,19 @@ func (s *PostgresStore) UploadDocument(ctx context.Context, organizationID, docu
 		upload.StorageRef, upload.SizeBytes, now, organizationID, documentID)
 	if err != nil {
 		return Document{}, fmt.Errorf("update document status: %w", err)
+	}
+	if event != nil {
+		if !json.Valid(event.Payload) {
+			return Document{}, fmt.Errorf("outbox payload is not valid json")
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO event_outbox
+				(id, event_type, event_version, routing_key, organization_id, document_id, payload, status, next_attempt_at, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $8)`,
+			event.ID, event.EventType, event.EventVersion, event.RoutingKey, event.OrganizationID, event.DocumentID, event.Payload, event.CreatedAt)
+		if err != nil {
+			return Document{}, fmt.Errorf("insert event outbox record: %w", err)
+		}
 	}
 	doc, err := s.getDocumentTx(ctx, tx, organizationID, documentID)
 	if err != nil {

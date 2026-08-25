@@ -14,6 +14,8 @@ type Config struct {
 	R2AccessKeyID       string
 	R2SecretAccessKey   string
 	R2Bucket            string
+	RabbitMQURL         string
+	RabbitMQExchange    string
 	MaxUploadBytes      int64
 	AllowedContentTypes []string
 }
@@ -27,6 +29,8 @@ func Load() (Config, error) {
 		R2AccessKeyID:       strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),
 		R2SecretAccessKey:   strings.TrimSpace(os.Getenv("R2_SECRET_ACCESS_KEY")),
 		R2Bucket:            strings.TrimSpace(os.Getenv("R2_BUCKET")),
+		RabbitMQURL:         strings.TrimSpace(os.Getenv("RABBITMQ_URL")),
+		RabbitMQExchange:    getenv("RABBITMQ_EXCHANGE", "doclens.events"),
 		MaxUploadBytes:      int64Env("DOCUMENT_INTAKE_MAX_UPLOAD_BYTES", 10*1024*1024),
 		AllowedContentTypes: parseCSV(getenv("DOCUMENT_INTAKE_ALLOWED_CONTENT_TYPES", "application/pdf,image/jpeg,image/png,image/webp")),
 	}
