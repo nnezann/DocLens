@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package doclens.documents.v1;
+
+option go_package = "github.com/doclens/document-intake-service/internal/gen/doclens/documents/v1;documentsv1";
+
+service DocumentIntakeService {
+  rpc CreateDocument(CreateDocumentRequest) returns (Document);
+  rpc GetDocument(GetDocumentRequest) returns (Document);
+}
+
+message CreateDocumentRequest {
+  string organization_id = 1;
+  string type = 2;
+  string filename = 3;
+  string content_type = 4;
+  bytes content = 5;
+}
+
+message GetDocumentRequest {
+  string organization_id = 1;
+  string id = 2;
+}
+
+message Document {
+  string id = 1;
+  string organization_id = 2;
+  string type = 3;
+  string filename = 4;
+  string content_type = 5;
+  string status = 6;
+  string created_at = 7;
+}

@@ -12,7 +12,6 @@ import (
 	"github.com/doclens/api-gateway/internal/observability"
 	"github.com/doclens/api-gateway/internal/ratelimit"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 )
 
 type Server struct {
@@ -22,23 +21,21 @@ type Server struct {
 	verifier       auth.Verifier
 	authDisabled   bool
 	limiter        *ratelimit.Limiter
-	publicLimiter  *ratelimit.Limiter
 	requestTimeout time.Duration
 	healthChecks   map[string]healthv1.HealthClient
 }
 
 type Deps struct {
-	Identity          IdentityClient
-	Documents         DocumentsClient
-	Verification      VerificationClient
-	HealthChecks      map[string]healthv1.HealthClient
-	Logger            *slog.Logger
-	Metrics           *observability.Metrics
-	JWTSecret         string
-	AuthDisabled      bool
-	RateLimiter       *ratelimit.Limiter
-	PublicRateLimiter *ratelimit.Limiter
-	RequestTimeout    time.Duration
+	Identity       IdentityClient
+	Documents      DocumentsClient
+	Verification   VerificationClient
+	HealthChecks   map[string]healthv1.HealthClient
+	Logger         *slog.Logger
+	Metrics        *observability.Metrics
+	JWTSecret      string
+	AuthDisabled   bool
+	RateLimiter    *ratelimit.Limiter
+	RequestTimeout time.Duration
 }
 
 func New(deps Deps) http.Handler {
@@ -49,7 +46,6 @@ func New(deps Deps) http.Handler {
 		verifier:       auth.NewVerifier(deps.JWTSecret),
 		authDisabled:   deps.AuthDisabled,
 		limiter:        deps.RateLimiter,
-		publicLimiter:  deps.PublicRateLimiter,
 		requestTimeout: deps.RequestTimeout,
 		healthChecks:   deps.HealthChecks,
 	}
@@ -86,15 +82,8 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		defer cancel()
 		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", requestID)
-		r = r.WithContext(metadata.NewOutgoingContext(r.Context(), metadata.Pairs("x-request-id", requestID)))
 
-		limited := requiresAuth(r)
-		limiter := s.limiter
-		if !limited {
-			limiter = s.publicLimiter
-		}
-		if limiter != nil && !limiter.Allow(clientIP(r)) {
-			recorder.Header().Set("Retry-After", "1")
+		if s.limiter != nil && !s.limiter.Allow(clientIP(r)) {
 			observability.Error(recorder, http.StatusTooManyRequests, "rate limit exceeded")
 			s.finish(r, requestID, recorder.status, start)
 			return
@@ -107,12 +96,6 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				return
 			}
 			r = r.WithContext(auth.WithClaims(r.Context(), claims))
-			r = r.WithContext(metadata.AppendToOutgoingContext(r.Context(),
-				"x-user-id", claims.Subject,
-				"x-org-id", claims.OrganizationID,
-				"x-roles", strings.Join(claims.Roles, ","),
-				"x-permissions", strings.Join(claims.Permissions, ","),
-			))
 		}
 		next.ServeHTTP(recorder, r)
 		s.finish(r, requestID, recorder.status, start)
@@ -137,21 +120,7 @@ func requiresAuth(r *http.Request) bool {
 	if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" {
 		return false
 	}
-	if r.Method != http.MethodPost {
-		return true
-	}
-	switch r.URL.Path {
-	case "/identity/signup",
-		"/identity/signup/verify-email",
-		"/identity/signup/organization",
-		"/identity/login",
-		"/identity/login/google",
-		"/identity/forgot-password",
-		"/identity/reset-password":
-		return false
-	default:
-		return true
-	}
+	return !(r.Method == http.MethodPost && r.URL.Path == "/identity/login")
 }
 
 func requestID(r *http.Request) string {

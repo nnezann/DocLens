@@ -13,7 +13,7 @@ type User struct {
 }
 
 type RefreshToken struct {
-	TokenHash string
+	Token     string
 	UserID    string
 	ExpiresAt time.Time
 	CreatedAt time.Time

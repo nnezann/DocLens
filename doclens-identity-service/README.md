@@ -2,9 +2,6 @@
 
 Go gRPC identity service for DocLens. It owns user authentication and emits gateway-compatible JWTs for the DocLens API Gateway.
 
-Passwords are stored using Argon2id with a per-password random salt; plaintext
-passwords are never persisted or logged.
-
 ## Implemented Surface
 
 | RPC | Purpose |
