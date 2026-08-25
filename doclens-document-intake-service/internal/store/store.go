@@ -15,22 +15,39 @@ import (
 var ErrDocumentNotFound = fmt.Errorf("document not found")
 var ErrOrganizationMismatch = fmt.Errorf("document belongs to a different organization")
 
-type Document struct {
+type UploadRecord struct {
 	ID             string
+	DocumentID     string
 	OrganizationID string
-	Type           string
 	Filename       string
 	ContentType    string
-	Status         string
-	StorageRef     string
 	SizeBytes      int64
+	Checksum       string
+	StorageRef     string
+	IdempotencyKey string
 	CreatedAt      time.Time
-	UpdatedAt      time.Time
+}
+
+type Document struct {
+	ID                  string
+	OrganizationID      string
+	Type                string
+	Filename            string
+	ContentType         string
+	Status              string
+	ProcessingJobStatus string
+	StorageRef          string
+	SizeBytes           int64
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Uploads             []UploadRecord
 }
 
 type Store interface {
 	CreateDocument(ctx context.Context, doc Document) (Document, error)
 	GetDocument(ctx context.Context, organizationID, id string) (Document, error)
+	UploadDocument(ctx context.Context, organizationID, documentID string, upload UploadRecord) (Document, error)
+	GetDocumentStatus(ctx context.Context, organizationID, documentID string) (Document, error)
 }
 
 type MemoryStore struct {
@@ -64,6 +81,37 @@ func (m *MemoryStore) GetDocument(_ context.Context, organizationID, id string) 
 		return Document{}, ErrOrganizationMismatch
 	}
 	return doc, nil
+}
+
+func (m *MemoryStore) UploadDocument(_ context.Context, organizationID, documentID string, upload UploadRecord) (Document, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, exists := m.docs[documentID]
+	if !exists {
+		return Document{}, ErrDocumentNotFound
+	}
+	if strings.TrimSpace(doc.OrganizationID) != strings.TrimSpace(organizationID) {
+		return Document{}, ErrOrganizationMismatch
+	}
+	for _, existing := range doc.Uploads {
+		if upload.IdempotencyKey != "" && existing.IdempotencyKey == upload.IdempotencyKey {
+			return doc, nil
+		}
+	}
+	doc.Uploads = append(doc.Uploads, upload)
+	doc.Status = "processing"
+	doc.ProcessingJobStatus = "queued"
+	doc.UpdatedAt = time.Now().UTC()
+	if upload.StorageRef != "" {
+		doc.StorageRef = upload.StorageRef
+		doc.SizeBytes = upload.SizeBytes
+	}
+	m.docs[documentID] = doc
+	return doc, nil
+}
+
+func (m *MemoryStore) GetDocumentStatus(_ context.Context, organizationID, documentID string) (Document, error) {
+	return m.GetDocument(context.Background(), organizationID, documentID)
 }
 
 type ObjectStorage interface {

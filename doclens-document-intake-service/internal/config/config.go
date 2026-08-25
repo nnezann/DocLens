@@ -8,7 +8,12 @@ import (
 
 type Config struct {
 	Address             string
+	DatabaseURL         string
 	StorageDir          string
+	R2Endpoint          string
+	R2AccessKeyID       string
+	R2SecretAccessKey   string
+	R2Bucket            string
 	MaxUploadBytes      int64
 	AllowedContentTypes []string
 }
@@ -16,7 +21,12 @@ type Config struct {
 func Load() (Config, error) {
 	cfg := Config{
 		Address:             getenv("DOCUMENT_INTAKE_GRPC_ADDR", ":9002"),
+		DatabaseURL:         strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		StorageDir:          getenv("DOCUMENT_INTAKE_STORAGE_DIR", "./data/documents"),
+		R2Endpoint:          strings.TrimSpace(os.Getenv("R2_ENDPOINT")),
+		R2AccessKeyID:       strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),
+		R2SecretAccessKey:   strings.TrimSpace(os.Getenv("R2_SECRET_ACCESS_KEY")),
+		R2Bucket:            strings.TrimSpace(os.Getenv("R2_BUCKET")),
 		MaxUploadBytes:      int64Env("DOCUMENT_INTAKE_MAX_UPLOAD_BYTES", 10*1024*1024),
 		AllowedContentTypes: parseCSV(getenv("DOCUMENT_INTAKE_ALLOWED_CONTENT_TYPES", "application/pdf,image/jpeg,image/png,image/webp")),
 	}

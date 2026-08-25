@@ -14,8 +14,15 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 - Validate tenant ownership, content type, filename, and size
 - Write file bytes to a pluggable object-store adapter
 - Persist metadata in a tenant-scoped in-memory store
-- Expose gRPC endpoints for creation and retrieval
+- Expose gRPC endpoints for creation, upload, retrieval, and processing status
 - Provide health checks for readiness and liveness
+
+## RPC surface
+
+- `CreateDocument`: creates a logical document record
+- `GetDocument`: fetches a document by tenant and ID
+- `UploadDocument`: stores physical bytes and returns upload metadata/checksum
+- `GetDocumentStatus`: returns the current lifecycle and processing status
 
 ## Configuration
 
@@ -25,6 +32,11 @@ Rust would only be a worthwhile follow-up if we observe sustained, high-volume i
 | `DOCUMENT_INTAKE_STORAGE_DIR` | `./data/documents` | Local object-store directory |
 | `DOCUMENT_INTAKE_MAX_UPLOAD_BYTES` | `10485760` | 10 MiB per upload |
 | `DOCUMENT_INTAKE_ALLOWED_CONTENT_TYPES` | `application/pdf,image/jpeg,image/png,image/webp` | Allowed upload types |
+| `DATABASE_URL` | empty | PostgreSQL connection URL; empty uses in-memory metadata for local development |
+| `R2_ENDPOINT` | empty | Cloudflare R2 S3-compatible endpoint |
+| `R2_ACCESS_KEY_ID` | empty | R2 API token access key |
+| `R2_SECRET_ACCESS_KEY` | empty | R2 API token secret |
+| `R2_BUCKET` | empty | R2 bucket name |
 
 ## Run
 
@@ -33,4 +45,4 @@ cd doclens-document-intake-service
 go run ./cmd/document-intake
 ```
 
-The service uses a local object-store adapter by default so it works in local development without requiring cloud credentials. It is structured so a production S3-compatible implementation can replace the adapter behind the same interface without changing the service contract.
+The service uses a local object-store adapter by default. Configure all R2 variables to use Cloudflare R2. Configure `DATABASE_URL` to use PostgreSQL; otherwise the in-memory metadata store is used only for local development.
