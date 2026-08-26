@@ -2,8 +2,7 @@
 
 DocLens is an AI-powered document verification platform built as a set of
 independently deployable services. The repository currently contains the
-platform foundation: a Go API Gateway, a Go Identity Service, and a Go
-Document Intake Service.
+platform foundation plus the deterministic Python Fingerprint Service.
 
 The architecture uses REST/HTTPS for external clients, gRPC for internal
 service calls, RabbitMQ for asynchronous events, PostgreSQL for authoritative
@@ -96,7 +95,16 @@ cd doclens-document-intake-service
 go run ./cmd/document-intake
 ```
 
-Start the API Gateway in a third terminal:
+Start the Fingerprint Service:
+
+```bash
+cd doclens-fingerprint-service
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=src python -m doclens_fingerprint
+```
+
+Start the API Gateway in another terminal:
 
 ```bash
 cd doclens-api-gateway
@@ -123,7 +131,8 @@ variables, PostgreSQL/RabbitMQ setup, and R2 configuration.
 ### Docker Compose local stack
 
 Run the complete local integration environment with PostgreSQL, RabbitMQ,
-RustFS, Identity, Document Intake, the API Gateway, and a verification stub:
+RustFS, Identity, Document Intake, Fingerprint, the API Gateway, and a
+verification stub:
 
 ```bash
 cp .env.local.example .env
@@ -132,8 +141,9 @@ docker compose -f docker-compose.local.yml up --build
 
 The gateway is available at `http://localhost:8080`, RustFS S3 API at
 `http://localhost:9000` with its console at `http://localhost:9001`, RabbitMQ
-management at `http://localhost:15672`, and Document Intake metrics at
-`http://localhost:9092/metrics`.
+management at `http://localhost:15672`, Document Intake metrics at
+`http://localhost:9092/metrics`, and Fingerprint health at
+`http://localhost:8084/health/ready`.
 
 This Compose stack is for local testing only. Production must use managed or
 production-operated PostgreSQL, RabbitMQ, and S3-compatible storage with
@@ -169,7 +179,8 @@ The broader architecture defines additional services that are not implemented
 in this repository stage:
 
 - Document Processing and OCR
-- Fingerprinting and similarity search
+- Fingerprinting and similarity search (implemented by
+  `doclens-fingerprint-service/`)
 - Knowledge and Rules services
 - Verification Engine
 - Fraud Detection and Risk Assessment

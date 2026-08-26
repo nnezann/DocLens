@@ -2,15 +2,26 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AuthLayout from '../components/AuthLayout'
 import TextField from '../components/TextField'
+import PasswordChecklist from '../components/PasswordChecklist'
 import { PrimaryButton } from '../components/Button'
+import { getPasswordStrength } from '../utils/validators'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [touched, setTouched] = useState(false)
+
+  const { isStrong } = getPasswordStrength(password)
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
+  const matchError = touched && confirmPassword.length > 0 && !passwordsMatch
+    ? 'Passwords do not match.'
+    : ''
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    setTouched(true)
+    if (!isStrong || !passwordsMatch) return
     navigate('/login')
   }
 
@@ -24,15 +35,18 @@ export default function ResetPassword() {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <TextField
-          id="new-password"
-          label="New password"
-          type="password"
-          placeholder="Enter Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <div>
+          <TextField
+            id="new-password"
+            label="New password"
+            type="password"
+            placeholder="Enter Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <PasswordChecklist password={password} />
+        </div>
         <TextField
           id="confirm-password"
           label="Confirm password"
@@ -40,6 +54,8 @@ export default function ResetPassword() {
           placeholder="Confirm Password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          onBlur={() => setTouched(true)}
+          error={matchError}
           required
         />
         <PrimaryButton type="submit">Continue</PrimaryButton>

@@ -9,6 +9,8 @@ import ResetPassword from './pages/ResetPassword'
 import AccountDetails from './pages/AccountDetails'
 import AccountSecurity from './pages/AccountSecurity'
 import OrganizationData from './pages/OrganizationData'
+import Home from './pages/Home'
+import Investigations from './pages/Investigations'
 import Dashboard from './pages/Dashboard'
 
 export default function App() {
@@ -32,7 +34,10 @@ export default function App() {
       <Route path="/signup/organization-data" element={<OrganizationData />} />
 
       {/* App */}
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/dashboard" element={<Home />} />
+      <Route path="/dashboard/investigations" element={<Investigations />} />
+      <Route path="/dashboard/investigations/new" element={<Dashboard />} />
+      {/* /dashboard/investigations/:id comes next once InvestigationDetail.jsx exists */}
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

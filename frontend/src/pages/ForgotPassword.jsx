@@ -3,13 +3,32 @@ import { useNavigate } from 'react-router-dom'
 import AuthLayout from '../components/AuthLayout'
 import TextField from '../components/TextField'
 import { PrimaryButton } from '../components/Button'
+import { isValidEmailFormat, checkEmailExists } from '../utils/validators'
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setError('')
+
+    if (!isValidEmailFormat(email)) {
+      setError('Enter a valid email address (e.g. name@company.com).')
+      return
+    }
+
+    setChecking(true)
+    const exists = await checkEmailExists(email)
+    setChecking(false)
+
+    if (!exists) {
+      setError("We couldn't find an account with that email.")
+      return
+    }
+
     navigate('/login/verify', {
       state: { nextPath: '/reset-password', maskedEmail: 'm*******n@work.com' },
     })
@@ -31,10 +50,16 @@ export default function ForgotPassword() {
           type="email"
           placeholder="Enter work email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            if (error) setError('')
+          }}
+          error={error}
           required
         />
-        <PrimaryButton type="submit">Continue</PrimaryButton>
+        <PrimaryButton type="submit" disabled={checking}>
+          {checking ? 'Checking...' : 'Continue'}
+        </PrimaryButton>
       </form>
     </AuthLayout>
   )
