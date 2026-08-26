@@ -33,7 +33,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Contracts',
-      items: ['contracts/overview', 'contracts/events'],
+      items: ['contracts/overview', 'contracts/openapi', 'contracts/events'],
     },
     {
       type: 'category',
