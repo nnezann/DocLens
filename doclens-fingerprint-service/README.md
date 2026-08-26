@@ -16,7 +16,7 @@ vector database.
 - **FastAPI**: small operational HTTP surface for liveness/readiness.
 - **gRPC**: documented, strongly typed internal `GetFingerprint` and
   `FindDuplicates` APIs, plus standard gRPC health checking.
-- **RabbitMQ**: asynchronous `document.uploaded` trigger and
+- **RabbitMQ**: asynchronous `document.processed` trigger and
   `fingerprint.created` outbox publication.
 - **PostgreSQL**: service-owned fingerprints, inbox deduplication, and
   transactional outbox.
@@ -76,12 +76,12 @@ does not issue fraud or risk verdicts.
 
 ## Events
 
-The consumer accepts the Document Intake envelope:
+The consumer accepts the Document Processing envelope:
 
 ```json
-{"event_id":"evt_1","event_type":"DocumentUploaded","event_version":1,
+{"event_id":"evt_1","event_type":"DocumentProcessed","event_version":1,
  "occurred_at":"...","organization_id":"org_1","document_id":"doc_1",
- "payload":{"uploads":[{"storage_ref":"org_1/doc_1/page.jpg"}]}}
+ "payload":{"uploads":[{"upload_id":"upl_1","result_ref":"processing/org_1/doc_1/evt_1/upl_1.json"}]}}
 ```
 
 It publishes `FingerprintCreated` with the same envelope conventions and
