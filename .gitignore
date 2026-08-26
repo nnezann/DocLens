@@ -3,5 +3,5 @@
 /doclens-ai-service/data/converted/
 *.pyc
 /doclens-ai-service/.env
-/frontend/node_modules/
+**/node_modules/
 /frontend/dist
