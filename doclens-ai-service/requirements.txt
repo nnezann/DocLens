@@ -4,3 +4,10 @@ requests
 opencv-python
 pymupdf
 docx2pdf
+fastapi
+uvicorn
+aio-pika
+psycopg[binary]
+boto3
+prometheus-client
+pytesseract

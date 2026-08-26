@@ -1,15 +1,20 @@
 import requests
 import numpy as np
-import os 
+import os
 
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
-EMBED_MODEL = "embeddinggemma:300m"
+
+OLLAMA_EMBED_URL = os.getenv("EMBEDDING_MODEL_URL")
+EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
+EMBED_TIMEOUT = float(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "60"))
 
 
 def get_embedding(text: str) -> np.ndarray:
+    if not OLLAMA_EMBED_URL or not EMBED_MODEL:
+        raise RuntimeError("embedding inference is not configured")
     response = requests.post(
         OLLAMA_EMBED_URL,
-        json={"model": EMBED_MODEL, "input": text}
+        json={"model": EMBED_MODEL, "input": text},
+        timeout=EMBED_TIMEOUT,
     )
     response.raise_for_status()
     embedding = response.json()["embeddings"][0]
