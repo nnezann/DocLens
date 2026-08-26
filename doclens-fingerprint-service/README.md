@@ -36,6 +36,17 @@ credentials/endpoint. `RABBITMQ_URL` enables consumption and outbox publishing;
 the exchange defaults to `doclens.events`. The service listens on gRPC
 `:9004` and HTTP `0.0.0.0:8084` by default.
 
+The local Docker Compose stack builds the service from this directory and
+provides PostgreSQL, RabbitMQ, and RustFS through the shared `doclens` network.
+For a container-only run:
+
+```bash
+docker build -t doclens-fingerprint:local .
+docker run --rm -p 8084:8084 -p 9004:9004 \
+  -e DATABASE_URL=postgresql://doclens:doclens@host.docker.internal:15432/doclens \
+  doclens-fingerprint:local
+```
+
 ## Internal gRPC API
 
 The contract is `proto/doclens/fingerprint/v1/fingerprint.proto`:
