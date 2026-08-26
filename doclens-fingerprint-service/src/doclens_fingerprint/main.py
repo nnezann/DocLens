@@ -9,7 +9,7 @@ import uvicorn
 from .config import Settings
 from .health import create_health_app
 from .logging import configure_logging
-from .rabbit import consume_document_uploaded, publish_outbox
+from .rabbit import consume_document_processed, publish_outbox
 from .repository import PostgresRepository
 from .grpc_server import create_grpc_server
 from .storage import S3ObjectStore
@@ -32,7 +32,7 @@ def main() -> None:
     logger.info("grpc_started", extra={"address": settings.grpc_addr})
 
     async def workers() -> None:
-        jobs = [consume_document_uploaded(processor, settings, logger),
+        jobs = [consume_document_processed(processor, settings, logger),
                 publish_outbox(repository, settings, logger)]
         await asyncio.gather(*jobs)
 

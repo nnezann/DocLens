@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS fingerprints (
     document_id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL,
     original_ref TEXT NOT NULL,
     normalized_ref TEXT NOT NULL,
     sha256 TEXT NOT NULL,
@@ -12,6 +13,7 @@ CREATE TABLE IF NOT EXISTS fingerprints (
 CREATE INDEX IF NOT EXISTS fingerprints_sha256_idx ON fingerprints (sha256);
 CREATE INDEX IF NOT EXISTS fingerprints_tlsh_idx ON fingerprints (tlsh) WHERE tlsh IS NOT NULL;
 CREATE INDEX IF NOT EXISTS fingerprints_created_at_idx ON fingerprints (created_at);
+CREATE INDEX IF NOT EXISTS fingerprints_organization_idx ON fingerprints (organization_id);
 
 CREATE TABLE IF NOT EXISTS event_outbox (
     id TEXT PRIMARY KEY,

@@ -5,7 +5,7 @@ import logging
 from typing import Any, Optional
 
 from .config import Settings
-from .events import fingerprint_event, uploaded_items
+from .events import fingerprint_event, processed_uploads
 from .hashing import normalize_image, phash_bits, sha256_hex, tlsh_digest
 from .models import DuplicateMatch, Fingerprint
 from .repository import PostgresRepository
@@ -23,10 +23,10 @@ class FingerprintProcessor:
     def process_event(self, event: dict[str, Any]) -> list[Fingerprint]:
         organization_id = event.get("organization_id", "")
         results = []
-        for index, upload in enumerate(uploaded_items(event)):
+        for index, upload in enumerate(processed_uploads(event)):
             document_id = event.get("document_id") or upload.get("document_id", "")
             if not document_id or not upload.get("storage_ref"):
-                raise ValueError("DocumentUploaded is missing document_id or storage_ref")
+                raise ValueError("DocumentProcessed is missing document_id or storage_ref")
             results.append(self.process_upload(
                 document_id=document_id,
                 organization_id=organization_id,
