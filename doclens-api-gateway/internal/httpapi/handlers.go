@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/doclens/api-gateway/internal/auth"
 	documentsv1 "github.com/doclens/api-gateway/internal/gen/doclens/documents/v1"
@@ -13,6 +14,7 @@ import (
 	"github.com/doclens/api-gateway/internal/observability"
 	"google.golang.org/grpc"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 )
 
 type IdentityClient interface {
@@ -23,6 +25,8 @@ type IdentityClient interface {
 type DocumentsClient interface {
 	CreateDocument(ctx context.Context, in *documentsv1.CreateDocumentRequest, opts ...grpc.CallOption) (*documentsv1.Document, error)
 	GetDocument(ctx context.Context, in *documentsv1.GetDocumentRequest, opts ...grpc.CallOption) (*documentsv1.Document, error)
+	UploadDocument(ctx context.Context, in *documentsv1.UploadDocumentRequest, opts ...grpc.CallOption) (*documentsv1.UploadDocumentResponse, error)
+	GetDocumentStatus(ctx context.Context, in *documentsv1.GetDocumentStatusRequest, opts ...grpc.CallOption) (*documentsv1.DocumentStatus, error)
 }
 
 type VerificationClient interface {
@@ -106,7 +110,7 @@ func (h handlers) createDocument(w http.ResponseWriter, r *http.Request) {
 		observability.Error(w, http.StatusBadRequest, "content_base64 must be valid base64")
 		return
 	}
-	doc, err := h.documents.CreateDocument(r.Context(), &documentsv1.CreateDocumentRequest{
+	doc, err := h.documents.CreateDocument(withIdentityMetadata(r, orgID), &documentsv1.CreateDocumentRequest{
 		OrganizationId: orgID,
 		Type:           req.Type,
 		Filename:       req.Filename,
@@ -126,7 +130,7 @@ func (h handlers) getDocument(w http.ResponseWriter, r *http.Request) {
 		observability.Error(w, http.StatusBadRequest, "organization_id is required")
 		return
 	}
-	doc, err := h.documents.GetDocument(r.Context(), &documentsv1.GetDocumentRequest{
+	doc, err := h.documents.GetDocument(withIdentityMetadata(r, orgID), &documentsv1.GetDocumentRequest{
 		OrganizationId: orgID,
 		Id:             r.PathValue("id"),
 	})
@@ -135,6 +139,53 @@ func (h handlers) getDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	observability.WriteJSON(w, http.StatusOK, doc)
+}
+
+func (h handlers) uploadDocument(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Filename       string `json:"filename"`
+		ContentType    string `json:"content_type"`
+		ContentBase64  string `json:"content_base64"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	orgID := organizationID(r, r.URL.Query().Get("organization_id"))
+	if orgID == "" || req.Filename == "" || req.ContentBase64 == "" {
+		observability.Error(w, http.StatusBadRequest, "organization_id, filename, and content_base64 are required")
+		return
+	}
+	content, err := base64.StdEncoding.DecodeString(req.ContentBase64)
+	if err != nil {
+		observability.Error(w, http.StatusBadRequest, "content_base64 must be valid base64")
+		return
+	}
+	upload, err := h.documents.UploadDocument(withIdentityMetadata(r, orgID), &documentsv1.UploadDocumentRequest{
+		OrganizationId: orgID, DocumentId: r.PathValue("id"), Filename: req.Filename,
+		ContentType: req.ContentType, Content: content, IdempotencyKey: req.IdempotencyKey,
+	})
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	observability.WriteJSON(w, http.StatusAccepted, upload)
+}
+
+func (h handlers) getDocumentStatus(w http.ResponseWriter, r *http.Request) {
+	orgID := organizationID(r, r.URL.Query().Get("organization_id"))
+	if orgID == "" {
+		observability.Error(w, http.StatusBadRequest, "organization_id is required")
+		return
+	}
+	documentStatus, err := h.documents.GetDocumentStatus(withIdentityMetadata(r, orgID), &documentsv1.GetDocumentStatusRequest{
+		OrganizationId: orgID, DocumentId: r.PathValue("id"),
+	})
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	observability.WriteJSON(w, http.StatusOK, documentStatus)
 }
 
 func (h handlers) startVerification(w http.ResponseWriter, r *http.Request) {
@@ -187,4 +238,16 @@ func organizationID(r *http.Request, fallback string) string {
 		return claims.OrganizationID
 	}
 	return fallback
+}
+
+func withIdentityMetadata(r *http.Request, organizationID string) context.Context {
+	ctx := r.Context()
+	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+		return metadata.AppendToOutgoingContext(ctx,
+			"x-organization-id", claims.OrganizationID,
+			"x-user-id", claims.Subject,
+			"x-roles", strings.Join(claims.Roles, ","),
+		)
+	}
+	return metadata.AppendToOutgoingContext(ctx, "x-organization-id", organizationID, "x-roles", "org_admin")
 }

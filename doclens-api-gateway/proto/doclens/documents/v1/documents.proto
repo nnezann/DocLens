@@ -7,6 +7,8 @@ option go_package = "github.com/doclens/api-gateway/internal/gen/doclens/documen
 service DocumentIntakeService {
   rpc CreateDocument(CreateDocumentRequest) returns (Document);
   rpc GetDocument(GetDocumentRequest) returns (Document);
+  rpc UploadDocument(UploadDocumentRequest) returns (UploadDocumentResponse);
+  rpc GetDocumentStatus(GetDocumentStatusRequest) returns (DocumentStatus);
 }
 
 message CreateDocumentRequest {
@@ -22,6 +24,34 @@ message GetDocumentRequest {
   string id = 2;
 }
 
+message UploadDocumentRequest {
+  string organization_id = 1;
+  string document_id = 2;
+  string filename = 3;
+  string content_type = 4;
+  bytes content = 5;
+  string idempotency_key = 6;
+}
+
+message UploadDocumentResponse {
+  string upload_id = 1;
+  string document_id = 2;
+  string storage_ref = 3;
+  string checksum = 4;
+}
+
+message GetDocumentStatusRequest {
+  string organization_id = 1;
+  string document_id = 2;
+}
+
+message DocumentStatus {
+  string document_id = 1;
+  string status = 2;
+  string processing_job_status = 3;
+  string updated_at = 4;
+}
+
 message Document {
   string id = 1;
   string organization_id = 2;
@@ -29,5 +59,16 @@ message Document {
   string filename = 4;
   string content_type = 5;
   string status = 6;
+  string created_at = 7;
+  repeated Upload uploads = 8;
+}
+
+message Upload {
+  string id = 1;
+  string filename = 2;
+  string content_type = 3;
+  int64 size_bytes = 4;
+  string checksum = 5;
+  string storage_ref = 6;
   string created_at = 7;
 }

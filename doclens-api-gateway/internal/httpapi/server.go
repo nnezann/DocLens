@@ -69,6 +69,8 @@ func (s *Server) routes(h handlers) {
 	s.mux.HandleFunc("POST /identity/users", h.createUser)
 	s.mux.HandleFunc("POST /documents", h.createDocument)
 	s.mux.HandleFunc("GET /documents/{id}", h.getDocument)
+	s.mux.HandleFunc("POST /documents/{id}/uploads", h.uploadDocument)
+	s.mux.HandleFunc("GET /documents/{id}/status", h.getDocumentStatus)
 	s.mux.HandleFunc("POST /verifications", h.startVerification)
 	s.mux.HandleFunc("GET /verifications/{id}", h.getVerification)
 }
