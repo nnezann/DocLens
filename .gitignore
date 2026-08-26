@@ -52,4 +52,5 @@ Thumbs.db
 
 # Project specific
 doclens-ai-service/.env
+doclens-ai-service/data/converted/
 
