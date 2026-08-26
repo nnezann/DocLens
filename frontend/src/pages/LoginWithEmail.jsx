@@ -3,14 +3,26 @@ import { Link, useNavigate } from 'react-router-dom'
 import AuthLayout from '../components/AuthLayout'
 import TextField from '../components/TextField'
 import { PrimaryButton } from '../components/Button'
+import { isValidEmailFormat } from '../utils/validators'
 
 export default function LoginWithEmail() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
+
+    if (!isValidEmailFormat(email)) {
+      setError('Enter a valid email address (e.g. name@company.com).')
+      return
+    }
+
+    // Real auth: the backend should return one generic "invalid email or
+    // password" error here rather than confirming whether the email
+    // exists — that avoids leaking which emails are registered.
+    setError('')
     navigate('/dashboard')
   }
 
@@ -30,7 +42,11 @@ export default function LoginWithEmail() {
           type="email"
           placeholder="Enter work email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            if (error) setError('')
+          }}
+          error={error}
           required
         />
         <div>
