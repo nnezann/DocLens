@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: doclens
+      POSTGRES_USER: doclens
+      POSTGRES_PASSWORD: doclens
+    ports:
+      - "${POSTGRES_HOST_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doclens -d doclens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - identity-postgres:/var/lib/postgresql/data
+
+  identity:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      IDENTITY_GRPC_ADDR: ":9001"
+      IDENTITY_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
+      DATABASE_URL: postgres://doclens:doclens@postgres:5432/doclens?sslmode=disable
+      IDENTITY_DEV_SEED: "true"
+    ports:
+      - "${IDENTITY_HOST_PORT:-9001}:9001"
+
+volumes:
+  identity-postgres:

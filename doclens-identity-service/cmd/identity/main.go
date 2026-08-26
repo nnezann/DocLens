@@ -34,8 +34,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	var identityStore store.Store
+	var closeStore func()
+	if cfg.DatabaseURL == "" {
+		logger.Warn("DATABASE_URL is not set; using development-only in-memory identity store")
+		identityStore = store.NewMemory()
+	} else {
+		postgres, err := store.NewPostgres(context.Background(), cfg.DatabaseURL, cfg.DatabaseTimeout)
+		if err != nil {
+			logger.Error("database connection error", "error", err)
+			os.Exit(1)
+		}
+		if err := postgres.Migrate(context.Background()); err != nil {
+			postgres.Close()
+			logger.Error("database migration error", "error", err)
+			os.Exit(1)
+		}
+		identityStore = postgres
+		closeStore = postgres.Close
+	}
+	if closeStore != nil {
+		defer closeStore()
+	}
+
 	identity := service.NewIdentity(
-		store.NewMemory(),
+		identityStore,
 		auth.NewTokenIssuer(cfg.JWTSecret),
 		cfg.AccessTokenTTL,
 		cfg.RefreshTokenTTL,
