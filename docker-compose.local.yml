@@ -114,6 +114,43 @@ services:
     ports:
       - "9092:9092"
 
+  fingerprint:
+    build:
+      context: ./doclens-fingerprint-service
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://doclens:doclens@postgres:5432/doclens
+      RABBITMQ_URL: amqp://doclens:doclens@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: doclens.events
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-doclens}
+      S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-doclens-local-secret}
+      S3_BUCKET: doclens
+      S3_REGION: us-east-1
+      FINGERPRINT_GRPC_ADDR: ":9004"
+      FINGERPRINT_HTTP_ADDR: "0.0.0.0:8084"
+    expose:
+      - "9004"
+      - "8084"
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8084/health/live', timeout=2)"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   gateway:
     build:
       context: ./doclens-api-gateway
