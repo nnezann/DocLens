@@ -1,464 +1,193 @@
 # DocLens
 
-AI-powered document verification platform built using a scalable microservices architecture.
+DocLens is an AI-powered document verification platform built as a set of
+independently deployable services. The repository currently contains the
+platform foundation: a Go API Gateway, a Go Identity Service, and a Go
+Document Intake Service.
 
-DocLens helps organizations verify documents by combining document processing, AI analysis, fingerprinting, deterministic rules, fraud detection, and risk assessment into an automated verification pipeline.
+The architecture uses REST/HTTPS for external clients, gRPC for internal
+service calls, RabbitMQ for asynchronous events, PostgreSQL for authoritative
+Document Intake metadata, and S3-compatible object storage for document bytes.
 
----
+## Current repository stage
 
-## Overview
+### API Gateway
 
-DocLens is designed as a production-grade document verification system where each business capability is isolated into an independent service.
+`doclens-api-gateway/` exposes the external REST API and provides:
 
-Each service:
+- JWT authentication enforcement
+- Per-client rate limiting
+- Request timeouts and request IDs
+- Structured logging and Prometheus metrics
+- Gateway, dependency readiness, and health endpoints
+- gRPC forwarding to Identity, Document Intake, and Verification contracts
 
-- Owns its own data
-- Exposes controlled APIs
-- Communicates through synchronous APIs or asynchronous events
-- Can scale independently
+Implemented routes include:
 
----
+| Method | Path | Upstream |
+| --- | --- | --- |
+| `GET` | `/healthz` | Gateway |
+| `GET` | `/readyz` | Dependency health |
+| `GET` | `/metrics` | Gateway |
+| `POST` | `/identity/login` | Identity |
+| `POST` | `/identity/users` | Identity |
+| `POST` | `/documents` | Document Intake |
+| `GET` | `/documents/{id}` | Document Intake |
+| `POST` | `/documents/{id}/uploads` | Document Intake |
+| `GET` | `/documents/{id}/status` | Document Intake |
+| `POST` | `/verifications` | Verification contract |
+| `GET` | `/verifications/{id}` | Verification contract |
 
-## Architecture
+### Identity Service
 
-```
-Users / External Systems
-          |
-          v
-     API Gateway
-          |
-          v
-    Microservices
-          |
-          v
-   Event Platform
-          |
-          v
- Background Workers
-          |
-          v
- Data Infrastructure
-```
+`doclens-identity-service/` provides organization-scoped user creation and
+login over gRPC. It issues gateway-compatible JWT access tokens and refresh
+tokens, and exposes a gRPC health check.
 
----
+The current implementation uses an in-memory store and an optional seeded
+development administrator. PostgreSQL/Redis persistence is not implemented
+yet.
 
-# Core Services
+### Document Intake Service
 
-## API Gateway
+`doclens-document-intake-service/` owns:
 
-The external entry point for DocLens.
+- Logical document records
+- Physical upload metadata
+- Processing-job status
 
-Responsibilities:
+It provides gRPC operations to create, retrieve, upload, and inspect document
+status. It validates tenant scope, filenames, MIME types, and upload size.
+Bytes are written to local storage by default or to Cloudflare R2 through the
+S3-compatible adapter.
 
-- Request routing
-- Authentication enforcement
-- Rate limiting
-- Request validation
-- Logging
-- Metrics collection
-- Domain-specific policies
+When PostgreSQL is configured, document metadata, upload metadata, processing
+state, and `DocumentUploaded` outbox records are persisted transactionally.
+The RabbitMQ publisher retries pending outbox records using the
+`document.uploaded` routing key. Without PostgreSQL, the service uses an
+in-memory metadata store for local development.
 
----
+## Repository layout
 
-## Identity Service
-
-Responsible for identity management.
-
-Owns:
-
-- Users
-- Organizations
-- Roles
-- Permissions
-- Sessions
-- Refresh tokens
-
-Events:
-
-- UserCreated
-- UserRoleChanged
-- UserDisabled
-
----
-
-## Document Intake Service
-
-Handles document uploads and processing workflows.
-
-Owns:
-
-- Documents
-- Upload records
-- Processing jobs
-
-Produces:
-
-```
-DocumentUploaded
+```text
+doclens-api-gateway/              REST gateway and gateway protobuf contracts
+doclens-identity-service/         Identity gRPC service
+doclens-document-intake-service/  Document Intake gRPC service and migrations
+Doclens_Engineering_Specification.md
+DocLens_Document_Intake_Build_Prompt.md
 ```
 
----
+Each service has its own README with configuration, usage, and technology
+rationale.
 
-## Document Processing Service
+## Running locally
 
-Handles document understanding.
+Start the Identity Service:
 
-Responsibilities:
-
-- OCR processing
-- Text extraction
-- Metadata extraction
-- Image analysis
-
-Consumes:
-
-```
-DocumentUploaded
+```bash
+cd doclens-identity-service
+JWT_SECRET=dev-secret go run ./cmd/identity
 ```
 
-Produces:
+Start the Document Intake Service:
 
-```
-DocumentProcessed
-```
-
----
-
-## Fingerprint Service
-
-Provides similarity and duplicate detection.
-
-Responsibilities:
-
-- Generate document hashes
-- Generate embeddings
-- Detect duplicate documents
-- Similarity search
-
----
-
-## Verification Engine
-
-Coordinates verification workflows.
-
-Components:
-
-- Rules Engine
-- Fraud Detection
-- Risk Assessment
-- Verification Records
-
-Flow:
-
-```
-Document
-   |
-   v
-Verification Engine
-   |
-   +--> Rules Engine
-   |
-   +--> Fraud Detection
-   |
-   +--> Risk Assessment
-   |
-   v
-Verification Decision
+```bash
+cd doclens-document-intake-service
+go run ./cmd/document-intake
 ```
 
----
+Start the API Gateway in a third terminal:
 
-## Review Service
-
-Supports human investigation workflows for failed or high-risk verification cases.
-
----
-
-## Reporting Service
-
-Provides:
-
-- Reports
-- Exports
-- Verification summaries
-
----
-
-## Learning Service
-
-Improves the system over time.
-
-Responsibilities:
-
-- Model improvement
-- Rule improvement
-- Learning from verification outcomes
-
----
-
-# Communication Model
-
-## External Communication
-
-```
-Client
-  |
-  v
-REST API
-  |
-  v
-API Gateway
+```bash
+cd doclens-api-gateway
+JWT_SECRET=dev-secret go run ./cmd/gateway
 ```
 
-## Internal Communication
+The gateway defaults to `http://localhost:8080`, Identity to gRPC
+`localhost:9001`, and Document Intake to gRPC `localhost:9002`. The gateway
+also dials the configured Verification endpoint; verification routes require a
+running compatible service when used.
 
-Synchronous communication:
+For a quick local login using the seeded identity:
 
-```
-REST / gRPC
-```
-
-Asynchronous communication:
-
-```
-Message Broker
-       |
-       v
-Event Consumers
+```bash
+curl -s http://localhost:8080/identity/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@doclens.local","password":"doclens-dev"}'
 ```
 
-Used for:
+Set `GATEWAY_AUTH_DISABLED=true` only for local development when JWT validation
+is intentionally bypassed. See each service README for all configuration
+variables, PostgreSQL/RabbitMQ setup, and R2 configuration.
 
-- Document processing
-- AI workloads
-- Background jobs
+### Docker Compose local stack
 
----
+Run the complete local integration environment with PostgreSQL, RabbitMQ,
+RustFS, Identity, Document Intake, the API Gateway, and a verification stub:
 
-# Event Architecture
-
-## DocumentUploaded
-
-Topic:
-
-```
-document.uploaded
+```bash
+cp .env.local.example .env
+docker compose -f docker-compose.local.yml up --build
 ```
 
-Example:
+The gateway is available at `http://localhost:8080`, RustFS S3 API at
+`http://localhost:9000` with its console at `http://localhost:9001`, RabbitMQ
+management at `http://localhost:15672`, and Document Intake metrics at
+`http://localhost:9092/metrics`.
+
+This Compose stack is for local testing only. Production must use managed or
+production-operated PostgreSQL, RabbitMQ, and S3-compatible storage with
+unique secrets, TLS, backups, monitoring, resource limits, and deployment
+secret management. The verification container is explicitly a local stub and
+must not be deployed as a production service.
+
+## Event contract
+
+`DocumentUploaded` is published with routing key `document.uploaded` using the
+versioned envelope defined in `Doclens_Engineering_Specification.md`:
 
 ```json
 {
   "event_id": "evt_123",
-  "document_id": "doc_456",
+  "event_type": "DocumentUploaded",
+  "event_version": 1,
+  "occurred_at": "2026-08-25T12:00:00Z",
   "organization_id": "org_123",
-  "type": "certificate"
-}
-```
-
-Consumers:
-
-- Processing Service
-- Fingerprint Service
-
----
-
-## VerificationCompleted
-
-Topic:
-
-```
-verification.completed
-```
-
-Example:
-
-```json
-{
-  "verification_id": "ver_123",
   "document_id": "doc_456",
-  "risk_score": 20,
-  "status": "approved"
+  "payload": {
+    "type": "certificate",
+    "upload_ids": ["upl_789"]
+  }
 }
 ```
 
----
+Consumers must deduplicate events by `event_id` or the AMQP message ID.
 
-# Data Architecture
+## Planned services
 
-Each service owns its own database.
+The broader architecture defines additional services that are not implemented
+in this repository stage:
 
-Example:
+- Document Processing and OCR
+- Fingerprinting and similarity search
+- Knowledge and Rules services
+- Verification Engine
+- Fraud Detection and Risk Assessment
+- Review, Reporting, and Learning services
 
-```
-Identity Service
-       |
-       v
-PostgreSQL
+These services will consume and produce versioned contracts without bypassing
+service ownership boundaries.
 
+## Development
 
-Document Service
-       |
-       v
-PostgreSQL
+Run the existing Go tests for the implemented services:
 
-
-Verification Service
-       |
-       v
-PostgreSQL
-```
-
-Services communicate through APIs and events instead of direct database access.
-
----
-
-# Infrastructure
-
-Deployment:
-
-```
-Internet
-   |
-Load Balancer
-   |
-API Gateway
-   |
-Kubernetes Cluster
-   |
-Services + Message Broker
-   |
-Databases
+```bash
+cd doclens-api-gateway && go test ./...
+cd ../doclens-identity-service && go test ./...
+cd ../doclens-document-intake-service && go test ./...
 ```
 
-Each service contains:
-
-- Deployment
-- Service definition
-- ConfigMap
-- Secrets
-- Horizontal Pod Autoscaler
-
----
-
-# Reliability
-
-DocLens supports:
-
-- Retry queues
-- Dead letter queues
-- Failure recovery
-- Operational alerts
-
-Example:
-
-```
-Service Failure
-       |
-       v
- Retry Queue
-       |
-       v
-Dead Letter Queue
-       |
-       v
-Operations Alert
-```
-
----
-
-# Security
-
-Authentication:
-
-- JWT
-- OAuth2
-
-Authorization:
-
-- RBAC
-- Permission checks
-
-Security:
-
-- TLS communication
-- Encryption at rest
-- Audit logging
-
-Tracked actions:
-
-- Document uploads
-- Verification decisions
-- Rule changes
-- Reviewer actions
-
----
-
-# Observability
-
-## Logging
-
-Structured logs:
-
-```json
-{
-  "request_id": "123",
-  "service": "verification",
-  "duration": 230,
-  "status": "success"
-}
-```
-
-## Metrics
-
-Tracked:
-
-- Request latency
-- Error rates
-- Queue length
-- Processing time
-- AI inference time
-
-## Distributed Tracing
-
-Tracks:
-
-```
-Gateway
- |
-Document Service
- |
-Processing Service
- |
-Verification Service
- |
-Fraud Detection
-```
-
----
-
-# Roadmap
-
-## Phase 1 — Platform Foundation
-
-- API Gateway
-- Identity Service
-- Document Intake
-- Storage
-- Processing Pipeline
-
-## Phase 2 — Verification Intelligence
-
-- Fingerprint Service
-- Rules Engine
-- Fraud Detection
-- Risk Assessment
-
-## Phase 3 — Enterprise Features
-
-- Reporting
-- Learning System
-- External APIs
-- Analytics Platform
-
----
+The engineering specification and service-specific build prompt are the
+authoritative sources for service boundaries, data ownership, API contracts,
+and event contracts.
