@@ -4,4 +4,10 @@
 *.pyc
 /doclens-ai-service/.env
 **/node_modules/
-/frontend/dist
+**/dist
+
+# Docusaurus local dependencies, caches, and generated output
+/docs-site/node_modules/
+/docs-site/.docusaurus/
+/docs-site/build/
+

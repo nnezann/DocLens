@@ -1,3 +1,7 @@
+node_modules/
+.docusaurus/
+.cache/
+
 # Dependencies
 /node_modules
 
