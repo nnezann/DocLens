@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package doclens.fingerprint.v1;
+
+service FingerprintService {
+  rpc GetFingerprint(GetFingerprintRequest) returns (FingerprintResponse);
+  rpc FindDuplicates(FindDuplicatesRequest) returns (DuplicateResults);
+}
+
+message GetFingerprintRequest {
+  string document_id = 1;
+}
+
+message FindDuplicatesRequest {
+  string document_id = 1;
+  string sha256 = 2;
+  string tlsh = 3;
+  string phash = 4;
+  int32 limit = 5;
+}
+
+message Fingerprint {
+  string document_id = 1;
+  string original_ref = 2;
+  string normalized_ref = 3;
+  string sha256 = 4;
+  string tlsh = 5;
+  string phash = 6;
+  string duplicate_of = 7;
+  string created_at = 8;
+}
+
+message FingerprintResponse {
+  Fingerprint fingerprint = 1;
+}
+
+message DuplicateMatch {
+  string document_id = 1;
+  int32 tlsh_distance = 2;
+  int32 phash_distance = 3;
+  bool exact_match = 4;
+  string duplicate_of = 5;
+}
+
+message DuplicateResults {
+  repeated DuplicateMatch matches = 1;
+}
