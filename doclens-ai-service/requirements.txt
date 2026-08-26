@@ -1,0 +1,6 @@
+pillow
+numpy
+requests
+opencv-python
+pymupdf
+docx2pdf
