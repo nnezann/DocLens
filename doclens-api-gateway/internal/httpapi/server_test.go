@@ -57,6 +57,7 @@ func TestCreateDocumentUsesOrganizationFromClaims(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+testJWT(t, "secret", map[string]any{
 		"sub":    "user_1",
 		"org_id": "org_claim",
+		"roles":  []string{"org_admin"},
 		"exp":    time.Now().Add(time.Hour).Unix(),
 	}))
 	rec := httptest.NewRecorder()
@@ -110,6 +111,14 @@ func (f *fakeDocuments) CreateDocument(_ context.Context, in *documentsv1.Create
 
 func (f *fakeDocuments) GetDocument(_ context.Context, in *documentsv1.GetDocumentRequest, _ ...grpc.CallOption) (*documentsv1.Document, error) {
 	return &documentsv1.Document{Id: in.Id, OrganizationId: in.OrganizationId}, nil
+}
+
+func (f *fakeDocuments) UploadDocument(_ context.Context, in *documentsv1.UploadDocumentRequest, _ ...grpc.CallOption) (*documentsv1.UploadDocumentResponse, error) {
+	return &documentsv1.UploadDocumentResponse{DocumentId: in.DocumentId, UploadId: "upl_1"}, nil
+}
+
+func (f *fakeDocuments) GetDocumentStatus(_ context.Context, in *documentsv1.GetDocumentStatusRequest, _ ...grpc.CallOption) (*documentsv1.DocumentStatus, error) {
+	return &documentsv1.DocumentStatus{DocumentId: in.DocumentId, Status: "processing", ProcessingJobStatus: "queued"}, nil
 }
 
 type fakeVerification struct{}
