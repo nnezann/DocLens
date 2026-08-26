@@ -1,5 +1,5 @@
-__pycache__/
-.idea/
-data/converted/
+/doclens-ai-service/__pycache__/
+/doclens-ai-service/.idea/
+/doclens-ai-service/data/converted/
 *.pyc
-.env
+/doclens-ai-service/.env
