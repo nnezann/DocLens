@@ -13,6 +13,8 @@ Custom Go API gateway for DocLens. It exposes REST endpoints to external clients
 | `POST` | `/identity/users` | IdentityService.CreateUser |
 | `POST` | `/documents` | DocumentIntakeService.CreateDocument |
 | `GET` | `/documents/{id}` | DocumentIntakeService.GetDocument |
+| `POST` | `/documents/{id}/uploads` | DocumentIntakeService.UploadDocument |
+| `GET` | `/documents/{id}/status` | DocumentIntakeService.GetDocumentStatus |
 | `POST` | `/verifications` | VerificationService.StartVerification |
 | `GET` | `/verifications/{id}` | VerificationService.GetVerification |
 

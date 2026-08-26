@@ -1,0 +1,7 @@
+/doclens-ai-service/__pycache__/
+/doclens-ai-service/.idea/
+/doclens-ai-service/data/converted/
+*.pyc
+/doclens-ai-service/.env
+**/node_modules/
+/frontend/dist
