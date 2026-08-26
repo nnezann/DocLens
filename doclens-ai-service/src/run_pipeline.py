@@ -15,9 +15,9 @@ from deterministic_check import run_deterministic_checks
 from embedding_check import compute_embedding_similarity
 from ela_check import run_ela
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_URL = os.getenv("MODEL_INFERENCE_URL")
 MAX_IMAGE_WIDTH = 768
-STREAM_TIMEOUT = 600
+STREAM_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT_SECONDS", "600"))
 
 
 def extract_risk_level(report_text: str) -> str:
@@ -101,7 +101,7 @@ Justification: {reason}
 The AI vision model was unavailable. This report contains only automated ELA analysis.
 A full forensic assessment requires visual inspection by the AI model or a human reviewer."""
 
-def run_pipeline_on_image(image_path: str, reference_image_path: str = None, model: str = "gemma3:4b") -> dict:
+def run_pipeline_on_image(image_path: str, reference_image_path: str = None, model: str | None = None) -> dict:
     if reference_image_path is None:
         reference_image_path = os.path.join(
             os.path.dirname(__file__), "..", "data", "converted", "Authentic-reference_page1.png"
@@ -151,7 +151,12 @@ def run_pipeline_on_image(image_path: str, reference_image_path: str = None, mod
         "similarity": similarity_result,
     }
     
-def call_ollama(prompt: str, image_b64: str, model: str = "gemma3:4b") -> str:
+def call_ollama(prompt: str, image_b64: str, model: str | None = None) -> str:
+    if not OLLAMA_URL:
+        raise RuntimeError("model inference is not configured")
+    model = model or os.getenv("MODEL_NAME")
+    if not model:
+        raise RuntimeError("MODEL_NAME is required when model inference is enabled")
     response = requests.post(
         OLLAMA_URL,
         json={
@@ -203,7 +208,7 @@ def build_fallback_report(ela_result: dict, image_path: str) -> str:
     )
 
 
-def run_full_pipeline(file_path: str, model: str = "gemma3:4b") -> str:
+def run_full_pipeline(file_path: str, model: str | None = None) -> str:
     # Step 1: Preprocess document to images
     print("Step 1: Preprocessing document...")
     image_paths = prepare_document_for_model(file_path)

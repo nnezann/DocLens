@@ -1,6 +1,7 @@
 from PIL import Image, ImageChops
 import numpy as np
 import os
+import io
 
 
 def run_ela(image_path: str, output_dir: str = "data/converted", quality: int = 90) -> dict:
@@ -90,6 +91,38 @@ def run_ela(image_path: str, output_dir: str = "data/converted", quality: int = 
         "summary": summary,
     }
     return findings
+
+
+def run_ela_bytes(image_bytes: bytes, quality: int = 90) -> dict:
+    """Deterministic ELA metrics without writing or mutating the source object."""
+    original = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    buffer = io.BytesIO()
+    original.save(buffer, "JPEG", quality=quality)
+    resaved = Image.open(io.BytesIO(buffer.getvalue())).convert("RGB")
+    diff_array = np.asarray(ImageChops.difference(original, resaved)).astype(np.float64)
+    max_diff = diff_array.max()
+    mean_error = float(diff_array.mean())
+    std_error = float(diff_array.std())
+    p99 = float(np.percentile(diff_array, 99))
+    uniformity_ratio = std_error / mean_error if mean_error > 0 else 0.0
+    tail_extension = (p99 - mean_error) / std_error if std_error > 0 else 0.0
+    if mean_error < 0.5:
+        anomaly_confidence, spatial_type = 0.05, "clean"
+    elif uniformity_ratio > 3.0:
+        anomaly_confidence, spatial_type = min(0.2, tail_extension / 30.0), "uniform"
+    elif tail_extension > 4.0 and uniformity_ratio <= 3.0:
+        anomaly_confidence, spatial_type = min(0.9, 0.3 + (tail_extension - 4.0) / 10.0), "localized"
+    else:
+        anomaly_confidence, spatial_type = 0.15, "moderate"
+    label = "HIGH" if anomaly_confidence >= 0.6 else "MODERATE" if anomaly_confidence >= 0.3 else "LOW"
+    return {
+        "mean_error": round(mean_error, 3),
+        "std_error": round(std_error, 3),
+        "p99_error": round(p99, 3),
+        "anomaly_confidence": round(anomaly_confidence, 3),
+        "confidence_label": label,
+        "spatial_type": spatial_type,
+    }
 
 
 if __name__ == "__main__":
