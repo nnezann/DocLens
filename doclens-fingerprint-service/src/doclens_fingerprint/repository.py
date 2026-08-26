@@ -81,13 +81,14 @@ class PostgresRepository:
                     return
                 cur.execute(
                     """INSERT INTO fingerprints
-                       (document_id, original_ref, normalized_ref, sha256, tlsh, phash, duplicate_of, created_at)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                       (document_id, organization_id, original_ref, normalized_ref, sha256, tlsh, phash, duplicate_of, created_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                        ON CONFLICT (document_id) DO UPDATE SET
+                         organization_id=EXCLUDED.organization_id,
                          original_ref=EXCLUDED.original_ref, normalized_ref=EXCLUDED.normalized_ref,
                          sha256=EXCLUDED.sha256, tlsh=EXCLUDED.tlsh, phash=EXCLUDED.phash,
                          duplicate_of=EXCLUDED.duplicate_of""",
-                    (fingerprint.document_id, fingerprint.original_ref, fingerprint.normalized_ref,
+                    (fingerprint.document_id, organization_id, fingerprint.original_ref, fingerprint.normalized_ref,
                      fingerprint.sha256, fingerprint.tlsh, fingerprint.phash,
                      fingerprint.duplicate_of, created),
                 )

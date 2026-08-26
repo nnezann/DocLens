@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="45205e0f-8282-485d-90f8-26b37427b1ab" name="Changes" comment="Made some changes" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Bruxe-Dev&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Bruxe-Dev/doclens-ai&quot;,
+    &quot;accountId&quot;: &quot;a3a549c4-602a-4cf4-89e4-e6c2550c790f&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="3IMU5jaAD7fxkeRssps0C0BWQLd" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/HP/Documents/Python projects/doclens-ai&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\HP\Documents\Python projects\doclens-ai" />
+      <recent name="C:\Users\HP\Documents\Python projects\doclens-ai\data" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="doclens-ai" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-4e2b1448bda8-9a97661f3031-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.27397.106" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="45205e0f-8282-485d-90f8-26b37427b1ab" name="Changes" comment="" />
+      <created>1787573749987</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1787573749987</updated>
+    </task>
+    <task id="LOCAL-00001" summary="Started working on my AI training and evaluation part inn this project the details are specified in the Project description.">
+      <option name="closed" value="true" />
+      <created>1787575358947</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1787575358947</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Made some changes">
+      <option name="closed" value="true" />
+      <created>1787575743984</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1787575743984</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Made some changes">
+      <option name="closed" value="true" />
+      <created>1787576862683</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1787576862683</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Created a file that i will use to first test the DocShield model before fine-tuning it.">
+      <option name="closed" value="true" />
+      <created>1787598042940</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1787598042940</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Finished loading the model now going to run it and load the model.">
+      <option name="closed" value="true" />
+      <created>1787599423447</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1787599423447</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Debugged the torch datatype i wrongly typed it because of the Pycharm's auto code completion">
+      <option name="closed" value="true" />
+      <created>1787599925306</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1787599925306</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Added this file because i learned that this model i am trying to use is pretrained to work with images to i am planning to first transform the docx and pdfs into images and then feed it to the model after that.">
+      <option name="closed" value="true" />
+      <created>1787603411525</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1787603411525</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Finished the file-image converter and also the model has finished loading now i am going to try the model out to see what i should change or if i should keep it all without having o Quantize it or drop it and try another one.">
+      <option name="closed" value="true" />
+      <created>1787607156084</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1787607156084</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Changed the file that the file-image converter is pointing to.">
+      <option name="closed" value="true" />
+      <created>1787607273783</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1787607273783</updated>
+    </task>
+    <task id="LOCAL-00010" summary="Made some changes">
+      <option name="closed" value="true" />
+      <created>1787652737550</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1787652737550</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Started working on my AI training and evaluation part inn this project the details are specified in the Project description." />
+    <MESSAGE value="Merge branch 'main' of https://github.com/Bruxe-Dev/doclens-ai" />
+    <MESSAGE value="Created a file that i will use to first test the DocShield model before fine-tuning it." />
+    <MESSAGE value="Finished loading the model now going to run it and load the model." />
+    <MESSAGE value="Debugged the torch datatype i wrongly typed it because of the Pycharm's auto code completion" />
+    <MESSAGE value="Added this file because i learned that this model i am trying to use is pretrained to work with images to i am planning to first transform the docx and pdfs into images and then feed it to the model after that." />
+    <MESSAGE value="Finished the file-image converter and also the model has finished loading now i am going to try the model out to see what i should change or if i should keep it all without having o Quantize it or drop it and try another one." />
+    <MESSAGE value="Changed the file that the file-image converter is pointing to." />
+    <MESSAGE value="Made some changes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Made some changes" />
+  </component>
+</project>
