@@ -3,13 +3,22 @@ import { Link, useNavigate } from 'react-router-dom'
 import AuthLayout from '../components/AuthLayout'
 import TextField from '../components/TextField'
 import { PrimaryButton } from '../components/Button'
+import { isValidEmailFormat } from '../utils/validators'
 
 export default function OrganizationSetup() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
+
+    if (!isValidEmailFormat(email)) {
+      setError('Enter a valid email address (e.g. name@company.com).')
+      return
+    }
+
+    setError('')
     navigate('/signup/verify')
   }
 
@@ -29,7 +38,11 @@ export default function OrganizationSetup() {
           type="email"
           placeholder="Enter work email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            if (error) setError('')
+          }}
+          error={error}
           required
         />
         <PrimaryButton type="submit">Continue</PrimaryButton>
