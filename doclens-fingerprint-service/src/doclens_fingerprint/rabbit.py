@@ -9,13 +9,13 @@ import aio_pika
 from aio_pika import ExchangeType, Message
 
 from .config import Settings
-from .events import DOCUMENT_UPLOADED
+from .events import DOCUMENT_PROCESSED
 from .repository import PostgresRepository
 from .service import FingerprintProcessor
 from .logging import request_id, trace_id
 
 
-async def consume_document_uploaded(processor: FingerprintProcessor, settings: Settings,
+async def consume_document_processed(processor: FingerprintProcessor, settings: Settings,
                                     logger: logging.Logger) -> None:
     if not settings.rabbitmq_url:
         logger.info("rabbitmq_disabled")
@@ -24,7 +24,7 @@ async def consume_document_uploaded(processor: FingerprintProcessor, settings: S
     channel = await connection.channel()
     exchange = await channel.declare_exchange(settings.rabbitmq_exchange, ExchangeType.TOPIC, durable=True)
     queue = await channel.declare_queue(settings.rabbitmq_queue, durable=True)
-    await queue.bind(exchange, routing_key=DOCUMENT_UPLOADED)
+    await queue.bind(exchange, routing_key=DOCUMENT_PROCESSED)
 
     async def handle(message: aio_pika.abc.AbstractIncomingMessage) -> None:
         try:
@@ -35,7 +35,7 @@ async def consume_document_uploaded(processor: FingerprintProcessor, settings: S
                                    settings.external_timeout_seconds)
             await message.ack()
         except Exception:
-            logger.exception("document_uploaded_processing_failed")
+            logger.exception("document_processed_processing_failed")
             await message.nack(requeue=True)
 
     await queue.consume(handle)

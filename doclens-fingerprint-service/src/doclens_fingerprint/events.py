@@ -5,14 +5,15 @@ from typing import Any
 import uuid
 
 
-DOCUMENT_UPLOADED = "document.uploaded"
+DOCUMENT_PROCESSED = "document.processed"
 FINGERPRINT_CREATED = "fingerprint.created"
 
 
-def uploaded_items(event: dict[str, Any]) -> list[dict[str, Any]]:
-    payload = event.get("payload", event)
+def processed_uploads(event: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract upload results from a DocumentProcessed event."""
+    payload = event.get("payload", {})
     uploads = payload.get("uploads", [])
-    if not uploads and payload.get("storage_ref"):
+    if not uploads and payload.get("result_ref"):
         uploads = [payload]
     if isinstance(uploads, dict):
         uploads = [uploads]
